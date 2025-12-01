@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA Training - Responsive Web Starter</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #fff;
+            color: #222;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0 10px 0;
+            flex-wrap: wrap;
+        }
+        .tab-buttons button {
+            padding: 10px 20px;
+            border: none;
+            background: #eee;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            font-weight: bold;
+            outline: none;
+            transition: background 0.2s, color 0.2s;
+        }
+        .tab-buttons button.active,
+        .tab-buttons button:focus {
+            background: #4287f5;
+            color: #fff;
+            outline: 2px solid #222;
+        }
+        .tab-buttons button:focus-visible {
+            outline: 2px solid #222;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            background: #fafafa;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .content-container {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            width: 100%;
+            gap: 20px;
+        }
+        main {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        aside {
+            width: 20%;
+            min-width: 160px;
+            background: #f4f4f4;
+            padding: 16px 10px;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        header, footer {
+            width: 100%;
+            background: #222;
+            color: #fff;
+            padding: 16px 0 8px 0;
+            text-align: center;
+        }
+        header h1, header h3 {
+            margin: 0.2em 0;
+        }
+        footer {
+            margin-top: 30px;
+            padding: 16px 0;
+        }
+        @media (max-width: 900px) {
+            .content-container {
+                flex-direction: column;
+            }
+            aside {
+                width: 100%;
+                margin-left: 0;
+                margin-top: 20px;
+            }
+        }
+        @media (max-width: 600px) {
+            .tab-buttons button {
+                flex: 1 1 100%;
+                min-width: 120px;
+                font-size: 1em;
+            }
+            .tab-content {
+                padding: 10px;
+            }
+            aside {
+                padding: 10px 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!--Make sure header is placed on top taking the entire width-->
+    <header role="banner">
+        <h1>QA Training</h1>
+        <h2 style="font-size:1.2em;font-weight:normal;">QA is the largest tech training company in the UK</h2>
+    </header>
+
+        <!-- Tab buttons at the top -->
+        <nav aria-label="Main tabs">
+            <div class="tab-buttons" role="tablist">
+                <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-home" id="tab-btn-home" tabindex="0" onclick="showTab(0)">Home</button>
+                <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-about" id="tab-btn-about" tabindex="-1" onclick="showTab(1)">About</button>
+                <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-audience" id="tab-btn-audience" tabindex="-1" onclick="showTab(2)">Target Audience</button>
+                <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-what" id="tab-btn-what" tabindex="-1" onclick="showTab(3)">What We Do</button>
+            </div>
+        </nav>
+
+    <!-- Our courses now part of Home tab -->
+
+    <!--main is placed in the centre of the page between nav and aside taking all the remaining width -->
+    <!--Limit the height of nav, main and aside using auto scrollbars -->
+        <div class="content-container">
+            <main id="main-content" tabindex="-1">
+                <section class="tab-content active" id="tab-home" role="tabpanel" aria-labelledby="tab-btn-home">
+                    <h2>Learn. To Change</h2>
+                    <p>
+                        Build your teams' tech skills with the latest training in AI, cloud, and data.<br>
+                        QA is the largest tech training company in the UK and the fastest growing in the US,<br>
+                        empowering organisations to learn, master, and apply new tech skills at scale.
+                    </p>
+                    <h3>Our courses</h3>
+                    <ul>
+                        <li>Java</li>
+                        <li>C#</li>
+                        <li>Web development</li>
+                        <li>Digital Skills</li>
+                        <li>Data analysis</li>
+                        <li>Project management</li>
+                    </ul>
+                </section>
+                <section class="tab-content" id="tab-about" role="tabpanel" aria-labelledby="tab-btn-about">
+                    <h3>About our Web development course:</h3>
+                    <p>
+                        You'll begin at square one, learning how the Web and web pages work,<br>
+                        and then steadily build from there. By the end of the course, you'll have the skills to create a website that is responsive to the device that it is being viewed on and contains features needed for good website development.<br>
+                        Learn how to use the latest techniques, best practices, and current web standards - including HTML5 and CSS3.
+                    </p>
+                </section>
+                <section class="tab-content" id="tab-audience" role="tabpanel" aria-labelledby="tab-btn-audience">
+                    <h3>Target Audience</h3>
+                    <p>
+                        The course is aimed at anyone who has been charged with setting up a website or developing web content as well as those interested in getting a better understanding of the many technologies used to deliver web content.
+                    </p>
+                </section>
+                <section class="tab-content" id="tab-what" role="tabpanel" aria-labelledby="tab-btn-what">
+                    <h3>What we do</h3>
+                    <ul>
+                        <li>Instructor-led learning</li>
+                        <li>Best for instructor-led cohorts: courses and training to meet the requirements of your business</li>
+                        <li>Online learning platform</li>
+                        <li>Best for flexible learning: subscribe to our platform and gain access to unlimited courses</li>
+                        <li>Apprenticeships & early talent</li>
+                        <li>Best for hiring and upskilling: Train tech talent with real-world experience</li>
+                    </ul>
+                </section>
+            </main>
+            <aside aria-label="Learning Modes">
+                <ul>
+                    <li>Total Learning</li>
+                    <li>Virtual Classroom</li>
+                    <li>Classroom</li>
+                    <li>Online (self-paced)</li>
+                    <li>Blended</li>
+                </ul>
+            </aside>
+        </div>
+    <!-- footer should appear at the bottom of the page taking 100% of the width -->
+        <footer role="contentinfo"><h3>QA is driving AI transformation - <time id="current-date"></time></h3></footer>
+        <script>
+        // Tab switching with accessibility
+        function showTab(idx) {
+            const tabs = document.querySelectorAll('.tab-content');
+            const btns = document.querySelectorAll('.tab-btn');
+            tabs.forEach((tab, i) => {
+                tab.classList.toggle('active', i === idx);
+                tab.setAttribute('aria-hidden', i !== idx);
+            });
+            btns.forEach((btn, i) => {
+                btn.classList.toggle('active', i === idx);
+                btn.setAttribute('aria-selected', i === idx ? 'true' : 'false');
+                btn.setAttribute('tabindex', i === idx ? '0' : '-1');
+            });
+            // Move focus to the tab panel for screen readers
+            document.getElementById(['tab-home','tab-about','tab-audience','tab-what'][idx]).focus();
+        }
+
+        // Set today's date in the footer
+        const dateElem = document.getElementById('current-date');
+        if (dateElem) {
+            const now = new Date();
+            dateElem.textContent = now.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        </script>
+    </body>
+</html>

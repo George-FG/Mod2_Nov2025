@@ -1,0 +1,105 @@
+.piece {
+  display: block;
+  width: 90%;
+  height: 90%;
+  font-size: 6.5vmin;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.white-piece {
+  color: #fff;
+  text-shadow:
+    1px 1px 2px #000,
+    0 0 2px #000,
+    0 0 1px #000;
+}
+
+.black-piece {
+  color: #111;
+  text-shadow:
+    1px 1px 2px #fff,
+    0 0 2px #fff,
+    0 0 1px #fff;
+}
+
+.chessboard-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0.5rem;
+  box-sizing: border-box;
+  overflow: auto;
+  gap: 0.5rem;
+}
+
+.chessboard {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: min(calc(100vw - 2rem), calc(100vh - 14rem));
+  height: min(calc(100vw - 2rem), calc(100vh - 14rem));
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 14rem);
+  aspect-ratio: 1 / 1;
+  border: 2px solid #333;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  background: #fff;
+  flex-shrink: 0;
+  margin-bottom: 1rem;
+}
+
+.square {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+.square.light {
+  background: #f0d9b5;
+}
+
+.square.dark {
+  background: #b58863;
+}
+
+.square.selected {
+  box-shadow: inset 0 0 0 3px #ffeb3b;
+  background-color: rgba(255, 235, 59, 0.3);
+}
+
+.square.selected.light {
+  background-color: rgba(255, 235, 59, 0.4);
+}
+
+.square.selected.dark {
+  background-color: rgba(255, 193, 7, 0.5);
+}
+
+.square.last-move {
+  box-shadow: 0 0 0 4px #4fc3f7 inset, 0 0 8px #4fc3f7;
+  z-index: 2;
+}
+
+.square.valid-move::after {
+  content: "";
+  width: 25%;
+  height: 25%;
+  border-radius: 50%;
+  background: rgba(0, 128, 0, 0.5);
+  position: absolute;
+}
+
+.square {
+  position: relative;
+}
+
+.square:hover {
+  opacity: 0.9;
+}
