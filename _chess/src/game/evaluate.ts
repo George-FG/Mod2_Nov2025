@@ -14,71 +14,61 @@ const pieceValues: Record<string, number> = {
 const STARTING_MATERIAL = 8 * 1 + 2 * 3 + 2 * 3 + 2 * 5 + 1 * 9; // = 39
 
 export function simpleEvaluate(board: Board, color: PieceColor): number {
-  // Check for checkmate or stalemate
-  const hasLegalMoves = hasAnyLegalMove(board, color);
-  const inCheck = isKingInCheck(board, color);
-  
-  if (!hasLegalMoves) {
-    if (inCheck) {
-      // Checkmate - worst possible score for the player in checkmate
-      return -Infinity;
-    } else {
-      // Stalemate - draw
-      return 0;
-    }
-  }
+  // Calculate material and positional scores
+  let myScore = 0;
+  let opponentScore = 0;
 
-  // Check if opponent is in checkmate
-  const opponentColor = color === 'white' ? 'black' : 'white';
-  const opponentHasLegalMoves = hasAnyLegalMove(board, opponentColor);
-  const opponentInCheck = isKingInCheck(board, opponentColor);
-  
-  if (!opponentHasLegalMoves && opponentInCheck) {
-    // Opponent is checkmated - best possible score
-    return Infinity;
-  }
-
-  let myMaterial = 0;
-  let theirMaterial = 0;
-
-  for (let row = 0; row < board.length; row++) {
-    for (let col = 0; col < board[row].length; col++) {
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
       const piece = board[row][col];
 
-      if (piece) {
-        const value = pieceValues[piece.type];
+      if (!piece) continue;
 
-        if (piece.color === color) {
-          myMaterial += value;
-        } else {
-          theirMaterial += value;
-        }
+      const value = pieceValues[piece.type];
+      const isCenter = (row === 3 || row === 4) && (col === 3 || col === 4);
+      const centerBonus = isCenter ? value * 0.1 : 0;
+
+      if (piece.color === color) {
+        myScore += value + centerBonus;
+      } else {
+        opponentScore += value + centerBonus;
       }
     }
   }
 
-  // Return the material difference (normalized) with tiny random noise to break ties
-  const materialDiff = (myMaterial - theirMaterial) / STARTING_MATERIAL;
-  const noise = (Math.random() - 0.5) * 0.001; // Small random value: -0.0005 to +0.0005
+  // Combine scores with small random noise to prevent repetition
+  const materialDiff = (myScore - opponentScore) / STARTING_MATERIAL;
+  const noise = (Math.random() - 0.5) * 0.001;
 
   return materialDiff + noise;
 }
 
-// Helper function to check if a player has any legal moves
+// Fast check for checkmate/stalemate - only called when moves.length === 0
+export function isCheckmate(board: Board, color: PieceColor): boolean {
+  if (!isKingInCheck(board, color)) return false;
+
+  return !hasAnyLegalMove(board, color);
+}
+
+export function isStalemate(board: Board, color: PieceColor): boolean {
+  if (isKingInCheck(board, color)) return false;
+
+  return !hasAnyLegalMove(board, color);
+}
+
 function hasAnyLegalMove(board: Board, color: PieceColor): boolean {
-  for (let row = 0; row < board.length; row++) {
-    for (let col = 0; col < board[row].length; col++) {
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
       const piece = board[row][col];
 
-      if (piece && piece.color === color) {
-        const from: Position = { row, col };
-        const moves = getValidMoves(board, from, piece);
-        const legalMoves = moves.filter(
-          (to) => !wouldMoveResultInCheck(board, from, to, color)
-        );
+      if (!piece || piece.color !== color) continue;
 
-        if (legalMoves.length > 0) {
-          return true;
+      const from: Position = { row, col };
+      const moves = getValidMoves(board, from, piece);
+      
+      for (const to of moves) {
+        if (!wouldMoveResultInCheck(board, from, to, color)) {
+          return true; // Early exit on first legal move found
         }
       }
     }

@@ -49,6 +49,14 @@ export function myMinimaxMove(
       return evaluate(board, rootColor); // Always evaluate from root AI's perspective
     }
 
+    // Move ordering: captures first for better pruning
+    moves.sort((a, b) => {
+      const aCapture = a.captured ? 1 : 0;
+      const bCapture = b.captured ? 1 : 0;
+
+      return bCapture - aCapture;
+    });
+
     let bestScore = maximizing ? -Infinity : Infinity;
 
     for (const move of moves) {
@@ -169,7 +177,12 @@ function getValidMovesForColor(board: Board, color: PieceColor): Move[] {
 
 // Helper: apply a move to a board and return a new board
 function applyMove(board: Board, move: Move): Board {
-  const newBoard = board.map((row) => [...row]);
+  // Shallow copy rows only (faster than map)
+  const newBoard: Board = [];
+
+  for (let i = 0; i < 8; i++) {
+    newBoard[i] = [...board[i]];
+  }
   const piece = newBoard[move.from.row][move.from.col];
 
   newBoard[move.to.row][move.to.col] = piece;
