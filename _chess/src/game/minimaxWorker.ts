@@ -3,9 +3,10 @@ import { myMinimaxMove } from './myMinimax';
 import { simpleEvaluate } from './evaluate';
 import { evaluateOffensive } from './evaluateOffensive';
 import { evaluateDefensive } from './evaluateDefensive';
+import { evaluateSuicidal } from './evaluateSuicidal';
 import type { Board, PieceColor } from './types';
 
-type EvaluationType = 'balanced' | 'offensive' | 'defensive';
+type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal';
 
 self.onmessage = function(e: MessageEvent) {
   const { board, color, depth, maxTime, evaluation = 'balanced' } = e.data as {
@@ -25,6 +26,9 @@ self.onmessage = function(e: MessageEvent) {
       break;
     case 'defensive':
       evaluateFunction = evaluateDefensive;
+      break;
+    case 'suicidal':
+      evaluateFunction = evaluateSuicidal;
       break;
     case 'balanced':
     default:

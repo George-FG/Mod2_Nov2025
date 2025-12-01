@@ -3,7 +3,7 @@ import "./GameSetup.css";
 
 export type PlayerType = "human" | "ai";
 
-export type EvaluationType = "balanced" | "offensive" | "defensive";
+export type EvaluationType = "balanced" | "offensive" | "defensive" | "suicidal";
 
 export interface AISettings {
   depth: number;
@@ -154,6 +154,7 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
                     <option value="balanced">Balanced</option>
                     <option value="offensive">Offensive</option>
                     <option value="defensive">Defensive</option>
+                    <option value="suicidal">I Will Lose</option>
                   </select>
                 </div>
                 <div style={{ marginBottom: '0.5rem' }}>
@@ -200,6 +201,7 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
                     <option value="balanced">Balanced</option>
                     <option value="offensive">Offensive</option>
                     <option value="defensive">Defensive</option>
+                    <option value="suicidal">I Will Lose</option>
                   </select>
                 </div>
                 <div style={{ marginBottom: '0.5rem' }}>
