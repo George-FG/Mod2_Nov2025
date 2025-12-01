@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import "./ChessBoard.css";
 import ChessPiece from "./ChessPiece";
 import { useChessGame, type GameOptions } from "./game/useChessGame";
@@ -11,6 +11,8 @@ interface ChessBoardProps {
 
 const ChessBoard: React.FC<ChessBoardProps> = ({ gameOptions }) => {
   const { gameState, selectSquare, isSquareSelected, isValidMove, whiteTime, blackTime } = useChessGame(gameOptions);
+  const [autoFlip, setAutoFlip] = useState(true);
+  const [manualFlip, setManualFlip] = useState(false);
 
   // Determine game over state and message
   let gameOver = false;
@@ -34,7 +36,27 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameOptions }) => {
 
   return (
     <div className="chessboard-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: '600px', marginBottom: '0.75rem', gap: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 500 }}>
+          <input
+            type="checkbox"
+            checked={autoFlip}
+            onChange={(e) => setAutoFlip(e.target.checked)}
+            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+          />
+          <span>Auto-Flip Board</span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 500 }}>
+          <input
+            type="checkbox"
+            checked={manualFlip}
+            onChange={(e) => setManualFlip(e.target.checked)}
+            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+          />
+          <span>Flip Board</span>
+        </label>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: '550px', marginBottom: '0.75rem', gap: '2rem' }}>
         <div style={{ textAlign: 'center', flex: 1 }}>
           <div style={{ fontSize: '1.1rem', fontWeight: '600', color: '#f0d9b5', backgroundColor: '#444', padding: '0.4rem 0.8rem', borderRadius: '6px', marginBottom: '0.4rem', border: '2px solid #b58863' }}>
             White: {gameState.whiteScore}
@@ -92,9 +114,11 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameOptions }) => {
       )}
       <div className="chessboard">
         {Array.from({ length: BOARD_SIZE * BOARD_SIZE }).map((_, i) => {
-          // Rotate board so current player is at bottom
-          const displayRow = gameState.currentPlayer === 'black' ? Math.floor(i / BOARD_SIZE) : (BOARD_SIZE - 1 - Math.floor(i / BOARD_SIZE));
-          const displayCol = gameState.currentPlayer === 'black' ? i % BOARD_SIZE : (BOARD_SIZE - 1 - (i % BOARD_SIZE));
+          // Determine if board should be flipped
+          const shouldFlip = manualFlip !== (autoFlip && gameState.currentPlayer === 'white');
+          
+          const displayRow = shouldFlip ? (BOARD_SIZE - 1 - Math.floor(i / BOARD_SIZE)) : Math.floor(i / BOARD_SIZE);
+          const displayCol = shouldFlip ? (BOARD_SIZE - 1 - (i % BOARD_SIZE)) : i % BOARD_SIZE;
           
           const row = displayRow;
           const col = displayCol;
