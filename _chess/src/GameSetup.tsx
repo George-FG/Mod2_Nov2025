@@ -3,9 +3,12 @@ import "./GameSetup.css";
 
 export type PlayerType = "human" | "ai";
 
+export type EvaluationType = "balanced" | "offensive" | "defensive";
+
 export interface AISettings {
   depth: number;
   maxTime: number;
+  evaluation: EvaluationType;
 }
 
 export interface GameSetupOptions {
@@ -50,7 +53,6 @@ const CLOCK_TIME_OPTIONS = [
   { label: "10 minutes", value: 600 },
   { label: "15 minutes", value: 900 },
   { label: "30 minutes", value: 1800 },
-  { label: "60 minutes", value: 3600 },
 ];
 
 const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
@@ -58,8 +60,10 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
   const [blackPlayer, setBlackPlayer] = useState<PlayerType>("ai");
   const [whiteAIDepth, setWhiteAIDepth] = useState<number>(2);
   const [whiteAIMaxTime, setWhiteAIMaxTime] = useState<number>(1000);
+  const [whiteAIEvaluation, setWhiteAIEvaluation] = useState<EvaluationType>("balanced");
   const [blackAIDepth, setBlackAIDepth] = useState<number>(2);
   const [blackAIMaxTime, setBlackAIMaxTime] = useState<number>(1000);
+  const [blackAIEvaluation, setBlackAIEvaluation] = useState<EvaluationType>("balanced");
   const [clockEnabled, setClockEnabled] = useState<boolean>(false);
   const [initialTime, setInitialTime] = useState<number>(300); // 5 minutes default
 
@@ -67,8 +71,8 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
     onStartGame({
       whitePlayer,
       blackPlayer,
-      whiteAI: whitePlayer === "ai" ? { depth: whiteAIDepth, maxTime: whiteAIMaxTime } : undefined,
-      blackAI: blackPlayer === "ai" ? { depth: blackAIDepth, maxTime: blackAIMaxTime } : undefined,
+      whiteAI: whitePlayer === "ai" ? { depth: whiteAIDepth, maxTime: whiteAIMaxTime, evaluation: whiteAIEvaluation } : undefined,
+      blackAI: blackPlayer === "ai" ? { depth: blackAIDepth, maxTime: blackAIMaxTime, evaluation: blackAIEvaluation } : undefined,
       clockEnabled,
       initialTime,
     });
@@ -135,12 +139,23 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
           </div>
         </div>
 
-
         {(whitePlayer === "ai" || blackPlayer === "ai") && (
-          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1.5rem', justifyContent: 'center' }}>
             {whitePlayer === "ai" && (
               <div className="ai-settings" style={{ minWidth: 180 }}>
                 <h2 style={{ textAlign: 'center', marginBottom: '0.5rem', fontSize: '1.1rem' }}>White AI</h2>
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: 3, fontSize: '0.9rem', color: '#333' }}>Strategy</label>
+                  <select
+                    value={whiteAIEvaluation}
+                    onChange={(e) => setWhiteAIEvaluation(e.target.value as EvaluationType)}
+                    className="move-time-select"
+                  >
+                    <option value="balanced">Balanced</option>
+                    <option value="offensive">Offensive</option>
+                    <option value="defensive">Defensive</option>
+                  </select>
+                </div>
                 <div style={{ marginBottom: '0.5rem' }}>
                   <label style={{ display: 'block', fontWeight: 600, marginBottom: 3, fontSize: '0.9rem', color: '#333' }}>Depth</label>
                   <select
@@ -171,9 +186,22 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
                 </div>
               </div>
             )}
+
             {blackPlayer === "ai" && (
               <div className="ai-settings" style={{ minWidth: 180 }}>
                 <h2 style={{ textAlign: 'center', marginBottom: '0.5rem', fontSize: '1.1rem' }}>Black AI</h2>
+                <div style={{ marginBottom: '0.5rem' }}>
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: 3, fontSize: '0.9rem', color: '#333' }}>Strategy</label>
+                  <select
+                    value={blackAIEvaluation}
+                    onChange={(e) => setBlackAIEvaluation(e.target.value as EvaluationType)}
+                    className="move-time-select"
+                  >
+                    <option value="balanced">Balanced</option>
+                    <option value="offensive">Offensive</option>
+                    <option value="defensive">Defensive</option>
+                  </select>
+                </div>
                 <div style={{ marginBottom: '0.5rem' }}>
                   <label style={{ display: 'block', fontWeight: 600, marginBottom: 3, fontSize: '0.9rem', color: '#333' }}>Depth</label>
                   <select

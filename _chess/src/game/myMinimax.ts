@@ -1,5 +1,5 @@
 import type { Board, PieceColor, Move, Position } from './types';
-import { getValidMoves, wouldMoveResultInCheck } from './moveValidation';
+import { getValidMoves, wouldMoveResultInCheck, isKingInCheck } from './moveValidation';
 
 export function myMinimaxMove(
   board: Board,
@@ -46,15 +46,38 @@ export function myMinimaxMove(
     const moves = getValidMovesForColor(board, currentPlayerColor);
 
     if (moves.length === 0) {
-      return evaluate(board, rootColor); // Always evaluate from root AI's perspective
+      // Terminal position: checkmate or stalemate
+      const inCheck = isKingInCheck(board, currentPlayerColor);
+      
+      if (inCheck) {
+        // Checkmate - prefer quicker checkmates
+        const mateScore = maximizing ? -100000 : 100000;
+
+        return mateScore + (maximizing ? depth : -depth);
+      } else {
+        // Stalemate - draw (bad when winning, good when losing)
+        return 0;
+      }
     }
 
-    // Move ordering: captures first for better pruning
+    // Move ordering: captures first, then checks for better pruning
     moves.sort((a, b) => {
-      const aCapture = a.captured ? 1 : 0;
-      const bCapture = b.captured ? 1 : 0;
-
-      return bCapture - aCapture;
+      let aScore = 0;
+      let bScore = 0;
+      
+      // Prioritize captures
+      if (a.captured) aScore += 10;
+      if (b.captured) bScore += 10;
+      
+      // Prioritize checks (helps find checkmate faster)
+      const aBoardAfter = applyMove(board, a);
+      const bBoardAfter = applyMove(board, b);
+      const opponentColor = currentPlayerColor === 'white' ? 'black' : 'white';
+      
+      if (isKingInCheck(aBoardAfter, opponentColor)) aScore += 5;
+      if (isKingInCheck(bBoardAfter, opponentColor)) bScore += 5;
+      
+      return bScore - aScore;
     });
 
     let bestScore = maximizing ? -Infinity : Infinity;

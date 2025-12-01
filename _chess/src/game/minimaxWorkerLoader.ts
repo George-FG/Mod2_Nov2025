@@ -1,19 +1,23 @@
 // Loader to run minimax in a Web Worker from the main thread
-// Usage: call runMinimaxInWorker({ board, color, depth, maxTime })
+// Usage: call runMinimaxInWorker({ board, color, depth, maxTime, evaluation })
 
 import type { Board, PieceColor, Move } from './types';
+
+export type EvaluationType = 'balanced' | 'offensive' | 'defensive';
 
 // For Vite with module workers
 export function runMinimaxInWorker({ 
   board, 
   color, 
   depth, 
-  maxTime 
+  maxTime,
+  evaluation = 'balanced'
 }: { 
   board: Board; 
   color: PieceColor; 
   depth: number; 
-  maxTime: number; 
+  maxTime: number;
+  evaluation?: EvaluationType;
 }): Promise<Move | null> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(
@@ -29,6 +33,6 @@ export function runMinimaxInWorker({
       reject(err);
       worker.terminate();
     };
-    worker.postMessage({ board, color, depth, maxTime });
+    worker.postMessage({ board, color, depth, maxTime, evaluation });
   });
 }

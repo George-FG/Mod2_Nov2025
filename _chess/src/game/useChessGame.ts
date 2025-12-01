@@ -2,13 +2,14 @@ import { useState, useCallback, useEffect } from 'react';
 import type { GameState, Position, Move, Board, PieceType, PieceColor } from './types';
 import { createInitialBoard } from './initialBoard';
 import { getValidMoves, isPositionEqual, isKingInCheck, wouldMoveResultInCheck, getCastlingMoves } from './moveValidation';
-import { runMinimaxInWorker } from './minimaxWorkerLoader';
+import { runMinimaxInWorker, type EvaluationType } from './minimaxWorkerLoader';
 
 export type PlayerType = 'human' | 'ai';
 
 export interface AISettings {
   depth: number;
   maxTime: number;
+  evaluation: EvaluationType;
 }
 
 export interface GameOptions {
@@ -397,10 +398,11 @@ export const useChessGame = (options: GameOptions) => {
     const aiSettings = gameState.currentPlayer === 'white' ? options.whiteAI : options.blackAI;
     const depth = aiSettings?.depth ?? 2;
     const maxTime = aiSettings?.maxTime ?? 5000;
+    const evaluation = aiSettings?.evaluation ?? 'balanced';
     const currentBoard = gameState.board;
     const currentPlayer = gameState.currentPlayer;
     // Use a real Web Worker for AI
-    const bestMove = await runMinimaxInWorker({ board: currentBoard, color: currentPlayer, depth, maxTime });
+    const bestMove = await runMinimaxInWorker({ board: currentBoard, color: currentPlayer, depth, maxTime, evaluation });
 
     if (bestMove) {
       setGameState(current => {

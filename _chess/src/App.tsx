@@ -38,7 +38,7 @@ function App() {
         >
           ← New Game
         </button>
-        <h1 style={{ margin: 0 }}>Chess</h1>
+        <h1 style={{ margin: 0 }}>Chess by Furious George</h1>
         <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '0.5rem' }}>
           White: {gameOptions.whitePlayer === 'human' ? '👤 Human' : '🤖 AI'} vs Black: {gameOptions.blackPlayer === 'human' ? '👤 Human' : '🤖 AI'}
         </div>

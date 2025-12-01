@@ -1,17 +1,38 @@
 // Web Worker for chess minimax AI - runs in separate thread
 import { myMinimaxMove } from './myMinimax';
 import { simpleEvaluate } from './evaluate';
+import { evaluateOffensive } from './evaluateOffensive';
+import { evaluateDefensive } from './evaluateDefensive';
 import type { Board, PieceColor } from './types';
 
+type EvaluationType = 'balanced' | 'offensive' | 'defensive';
+
 self.onmessage = function(e: MessageEvent) {
-  const { board, color, depth, maxTime } = e.data as {
+  const { board, color, depth, maxTime, evaluation = 'balanced' } = e.data as {
     board: Board;
     color: PieceColor;
     depth: number;
     maxTime: number;
+    evaluation?: EvaluationType;
   };
 
-  const move = myMinimaxMove(board, color, depth, simpleEvaluate, maxTime);
+  // Select evaluation function based on strategy
+  let evaluateFunction;
+
+  switch (evaluation) {
+    case 'offensive':
+      evaluateFunction = evaluateOffensive;
+      break;
+    case 'defensive':
+      evaluateFunction = evaluateDefensive;
+      break;
+    case 'balanced':
+    default:
+      evaluateFunction = simpleEvaluate;
+      break;
+  }
+
+  const move = myMinimaxMove(board, color, depth, evaluateFunction, maxTime);
 
   self.postMessage(move);
 };
