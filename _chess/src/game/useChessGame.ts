@@ -153,19 +153,30 @@ export const useChessGame = (options: GameOptions) => {
       k: 0,
     };
 
-    let newWhiteScore = state.whiteScore;
-    let newBlackScore = state.blackScore;
+    // Calculate material on board (starting material - lost material)
+    const STARTING_MATERIAL = 39; // 8p + 2n + 2b + 2r + 1q = 8 + 6 + 6 + 10 + 9 = 39
+    
+    let whiteMaterial = 0;
+    let blackMaterial = 0;
+    
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const p = newBoard[row][col];
 
-    // Add points for captured pieces
-    if (captured) {
-      const capturedValue = pieceValues[captured.type];
+        if (p) {
+          const value = pieceValues[p.type];
 
-      if (piece.color === 'white') {
-        newWhiteScore += capturedValue;
-      } else {
-        newBlackScore += capturedValue;
+          if (p.color === 'white') {
+            whiteMaterial += value;
+          } else {
+            blackMaterial += value;
+          }
+        }
       }
     }
+    
+    const newWhiteScore = STARTING_MATERIAL - whiteMaterial;
+    const newBlackScore = STARTING_MATERIAL - blackMaterial;
 
     // Update castling rights
     const newCastlingRights = { ...state.castlingRights };
