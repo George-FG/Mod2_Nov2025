@@ -58,11 +58,11 @@ const CLOCK_TIME_OPTIONS = [
 const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
   const [whitePlayer, setWhitePlayer] = useState<PlayerType>("human");
   const [blackPlayer, setBlackPlayer] = useState<PlayerType>("ai");
-  const [whiteAIDepth, setWhiteAIDepth] = useState<number>(2);
-  const [whiteAIMaxTime, setWhiteAIMaxTime] = useState<number>(1000);
+  const [whiteAIDepth, setWhiteAIDepth] = useState<number>(5);
+  const [whiteAIMaxTime, setWhiteAIMaxTime] = useState<number>(5000);
   const [whiteAIEvaluation, setWhiteAIEvaluation] = useState<EvaluationType>("balanced");
-  const [blackAIDepth, setBlackAIDepth] = useState<number>(2);
-  const [blackAIMaxTime, setBlackAIMaxTime] = useState<number>(1000);
+  const [blackAIDepth, setBlackAIDepth] = useState<number>(5);
+  const [blackAIMaxTime, setBlackAIMaxTime] = useState<number>(5000);
   const [blackAIEvaluation, setBlackAIEvaluation] = useState<EvaluationType>("balanced");
   const [clockEnabled, setClockEnabled] = useState<boolean>(false);
   const [initialTime, setInitialTime] = useState<number>(300); // 5 minutes default

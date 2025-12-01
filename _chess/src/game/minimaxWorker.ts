@@ -5,17 +5,18 @@ import { evaluateOffensive } from './evaluateOffensive';
 import { evaluateDefensive } from './evaluateDefensive';
 import { evaluateSuicidal } from './evaluateSuicidal';
 import { evaluateAttempt2 } from './evaluateAttempt2';
-import type { Board, PieceColor } from './types';
+import type { Board, PieceColor, CastlingRights } from './types';
 
 type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2';
 
 self.onmessage = function(e: MessageEvent) {
-  const { board, color, depth, maxTime, evaluation = 'balanced' } = e.data as {
+  const { board, color, depth, maxTime, evaluation = 'balanced', castlingRights } = e.data as {
     board: Board;
     color: PieceColor;
     depth: number;
     maxTime: number;
     evaluation?: EvaluationType;
+    castlingRights?: CastlingRights;
   };
 
   // Select evaluation function based on strategy
@@ -40,7 +41,7 @@ self.onmessage = function(e: MessageEvent) {
       break;
   }
 
-  const move = myMinimaxMove(board, color, depth, evaluateFunction, maxTime);
+  const move = myMinimaxMove(board, color, depth, evaluateFunction, maxTime, castlingRights);
 
   self.postMessage(move);
 };

@@ -1,7 +1,7 @@
 // Loader to run minimax in a Web Worker from the main thread
 // Usage: call runMinimaxInWorker({ board, color, depth, maxTime, evaluation })
 
-import type { Board, PieceColor, Move } from './types';
+import type { Board, PieceColor, Move, CastlingRights } from './types';
 
 export type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2';
 
@@ -11,13 +11,15 @@ export function runMinimaxInWorker({
   color, 
   depth, 
   maxTime,
-  evaluation = 'balanced'
+  evaluation = 'balanced',
+  castlingRights
 }: { 
   board: Board; 
   color: PieceColor; 
   depth: number; 
   maxTime: number;
   evaluation?: EvaluationType;
+  castlingRights?: CastlingRights;
 }): Promise<Move | null> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(
@@ -33,6 +35,6 @@ export function runMinimaxInWorker({
       reject(err);
       worker.terminate();
     };
-    worker.postMessage({ board, color, depth, maxTime, evaluation });
+    worker.postMessage({ board, color, depth, maxTime, evaluation, castlingRights });
   });
 }

@@ -412,8 +412,9 @@ export const useChessGame = (options: GameOptions) => {
     const evaluation = aiSettings?.evaluation ?? 'balanced';
     const currentBoard = gameState.board;
     const currentPlayer = gameState.currentPlayer;
+    const castlingRights = gameState.castlingRights;
     // Use a real Web Worker for AI
-    const bestMove = await runMinimaxInWorker({ board: currentBoard, color: currentPlayer, depth, maxTime, evaluation });
+    const bestMove = await runMinimaxInWorker({ board: currentBoard, color: currentPlayer, depth, maxTime, evaluation, castlingRights });
 
     if (bestMove) {
       setGameState(current => {
@@ -426,7 +427,7 @@ export const useChessGame = (options: GameOptions) => {
         return { ...newState, lastMoveTime: Date.now() };
       });
     }
-  }, [gameState.currentPlayer, gameState.board, options.whitePlayer, options.blackPlayer, options.whiteAI, options.blackAI, gameStarted, makeMove]);
+  }, [gameState.currentPlayer, gameState.board, gameState.castlingRights, options.whitePlayer, options.blackPlayer, options.whiteAI, options.blackAI, gameStarted, makeMove]);
 
   // AI move trigger
   useEffect(() => {

@@ -1,12 +1,13 @@
-import type { Board, PieceColor, Move, Position } from './types';
-import { getValidMoves, wouldMoveResultInCheck, isKingInCheck } from './moveValidation';
+import type { Board, PieceColor, Move, Position, CastlingRights } from './types';
+import { getValidMoves, wouldMoveResultInCheck, isKingInCheck, getCastlingMoves } from './moveValidation';
 
 export function myMinimaxMove(
   board: Board,
   color: PieceColor,
   depth: number,
   evaluate: (board: Board, color: PieceColor) => number,
-  maxTime?: number
+  maxTime?: number,
+  castlingRights?: CastlingRights
 ): Move | null {
   const startTime = Date.now();
   let bestMoveAtRoot: Move | null = null;
@@ -32,6 +33,7 @@ export function myMinimaxMove(
     maximizing: boolean,
     alpha: number,
     beta: number,
+    currentCastlingRights: CastlingRights | undefined,
     isRoot: boolean = false
   ): number {
     // Check if time limit exceeded - return immediately
@@ -43,7 +45,7 @@ export function myMinimaxMove(
       return evaluate(board, rootColor); // Always evaluate from root AI's perspective
     }
 
-    const moves = getValidMovesForColor(board, currentPlayerColor);
+    const moves = getValidMovesForColor(board, currentPlayerColor, currentCastlingRights);
 
     if (moves.length === 0) {
       // Terminal position: checkmate or stalemate
@@ -88,6 +90,7 @@ export function myMinimaxMove(
         break;
       }
       const newBoard = applyMove(board, move);
+      const newCastlingRights = updateCastlingRights(currentCastlingRights, move, board);
       const score = minimax(
         newBoard,
         currentPlayerColor === 'white' ? 'black' : 'white',
@@ -95,6 +98,7 @@ export function myMinimaxMove(
         !maximizing,
         alpha,
         beta,
+        newCastlingRights,
         false
       );
 
@@ -138,7 +142,7 @@ export function myMinimaxMove(
   }
 
   // Initialize with first valid move as fallback
-  const allMoves = getValidMovesForColor(board, color);
+  const allMoves = getValidMovesForColor(board, color, castlingRights);
 
   if (allMoves.length > 0) {
     bestMoveAtRoot = allMoves[0];
@@ -154,7 +158,7 @@ export function myMinimaxMove(
     const previousBestMove = bestMoveAtRoot;
     
     // Initialize alpha and beta for alpha-beta pruning
-    minimax(board, color, currentDepth, true, -Infinity, Infinity, true);
+    minimax(board, color, currentDepth, true, -Infinity, Infinity, castlingRights, true);
 
     // If time expired during this iteration, revert to previous best move
     if (isTimeExpired() && currentDepth > 1) {
@@ -167,7 +171,7 @@ export function myMinimaxMove(
 }
 
 // Helper: get all valid moves for a color
-function getValidMovesForColor(board: Board, color: PieceColor): Move[] {
+function getValidMovesForColor(board: Board, color: PieceColor, castlingRights?: CastlingRights): Move[] {
   const moves: Move[] = [];
 
   for (let row = 0; row < board.length; row++) {
@@ -191,11 +195,67 @@ function getValidMovesForColor(board: Board, color: PieceColor): Move[] {
             captured: board[to.row][to.col] || undefined,
           });
         }
+
+        // Add castling moves for king
+        if (piece.type === 'k' && castlingRights) {
+          const rights = color === 'white' 
+            ? { kingSide: castlingRights.whiteKingSide, queenSide: castlingRights.whiteQueenSide }
+            : { kingSide: castlingRights.blackKingSide, queenSide: castlingRights.blackQueenSide };
+          const inCheck = isKingInCheck(board, color);
+          const castlingMoves = getCastlingMoves(board, from, color, rights, inCheck);
+          
+          for (const to of castlingMoves) {
+            moves.push({
+              from,
+              to,
+              piece,
+              isCastling: true,
+            });
+          }
+        }
       }
     }
   }
 
   return moves;
+}
+
+// Helper: update castling rights based on a move
+function updateCastlingRights(
+  rights: CastlingRights | undefined,
+  move: Move,
+  board: Board
+): CastlingRights | undefined {
+  if (!rights) return undefined;
+
+  const newRights = { ...rights };
+  const piece = board[move.from.row][move.from.col];
+
+  if (!piece) return newRights;
+
+  // King moved - lose both castling rights
+  if (piece.type === 'k') {
+    if (piece.color === 'white') {
+      newRights.whiteKingSide = false;
+      newRights.whiteQueenSide = false;
+    } else {
+      newRights.blackKingSide = false;
+      newRights.blackQueenSide = false;
+    }
+  }
+
+  // Rook moved - lose castling right on that side
+  if (piece.type === 'r') {
+    if (piece.color === 'white' && move.from.row === 0) {
+      if (move.from.col === 0) newRights.whiteQueenSide = false;
+      if (move.from.col === 7) newRights.whiteKingSide = false;
+    } else if (piece.color === 'black' && move.from.row === 7) {
+      if (move.from.col === 0) newRights.blackQueenSide = false;
+      if (move.from.col === 7) newRights.blackKingSide = false;
+    }
+  }
+
+  return newRights;
 }
 
 // Helper: apply a move to a board and return a new board
