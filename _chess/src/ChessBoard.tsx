@@ -92,8 +92,12 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameOptions }) => {
       )}
       <div className="chessboard">
         {Array.from({ length: BOARD_SIZE * BOARD_SIZE }).map((_, i) => {
-          const row = Math.floor(i / BOARD_SIZE);
-          const col = i % BOARD_SIZE;
+          // Rotate board so current player is at bottom
+          const displayRow = gameState.currentPlayer === 'black' ? Math.floor(i / BOARD_SIZE) : (BOARD_SIZE - 1 - Math.floor(i / BOARD_SIZE));
+          const displayCol = gameState.currentPlayer === 'black' ? i % BOARD_SIZE : (BOARD_SIZE - 1 - (i % BOARD_SIZE));
+          
+          const row = displayRow;
+          const col = displayCol;
           const isDark = (row + col) % 2 === 1;
           const piece = gameState.board[row][col];
           const position = { row, col };

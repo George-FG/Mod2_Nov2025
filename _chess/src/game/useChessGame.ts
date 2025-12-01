@@ -406,6 +406,10 @@ export const useChessGame = (options: GameOptions) => {
 
     if (bestMove) {
       setGameState(current => {
+        // Only make the move if it's still this player's turn (prevents double moves)
+        if (current.currentPlayer !== currentPlayer) {
+          return current;
+        }
         const newState = makeMove(current, bestMove.from, bestMove.to);
 
         return { ...newState, lastMoveTime: Date.now() };
@@ -425,7 +429,7 @@ export const useChessGame = (options: GameOptions) => {
 
       return () => clearTimeout(timer);
     }
-  }, [gameState.currentPlayer, gameState.moveHistory.length, options.whitePlayer, options.blackPlayer, options.whiteAI, options.blackAI, makeAIMove, gameState.isCheckmate, gameState.isStalemate]);
+  }, [gameState.currentPlayer, gameState.isCheckmate, gameState.isStalemate, options.whitePlayer, options.blackPlayer, makeAIMove]);
 
   return {
     gameState,

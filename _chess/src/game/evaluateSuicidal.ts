@@ -20,6 +20,7 @@ export function evaluateSuicidal(board: Board, color: PieceColor): number {
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
       const piece = board[row][col];
+
       if (!piece) continue;
 
       if (piece.color === color) {

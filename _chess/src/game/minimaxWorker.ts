@@ -4,9 +4,10 @@ import { simpleEvaluate } from './evaluate';
 import { evaluateOffensive } from './evaluateOffensive';
 import { evaluateDefensive } from './evaluateDefensive';
 import { evaluateSuicidal } from './evaluateSuicidal';
+import { evaluateAttempt2 } from './evaluateAttempt2';
 import type { Board, PieceColor } from './types';
 
-type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal';
+type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2';
 
 self.onmessage = function(e: MessageEvent) {
   const { board, color, depth, maxTime, evaluation = 'balanced' } = e.data as {
@@ -29,6 +30,9 @@ self.onmessage = function(e: MessageEvent) {
       break;
     case 'suicidal':
       evaluateFunction = evaluateSuicidal;
+      break;
+    case 'attempt2':
+      evaluateFunction = evaluateAttempt2;
       break;
     case 'balanced':
     default:
