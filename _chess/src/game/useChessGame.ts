@@ -175,8 +175,9 @@ export const useChessGame = (options: GameOptions) => {
       }
     }
     
-    const newWhiteScore = STARTING_MATERIAL - whiteMaterial;
-    const newBlackScore = STARTING_MATERIAL - blackMaterial;
+    // Score = opponent's material lost (what you've captured)
+    const newWhiteScore = STARTING_MATERIAL - blackMaterial;
+    const newBlackScore = STARTING_MATERIAL - whiteMaterial;
 
     // Update castling rights
     const newCastlingRights = { ...state.castlingRights };
