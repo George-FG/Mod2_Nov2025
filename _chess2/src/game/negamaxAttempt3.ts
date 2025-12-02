@@ -551,13 +551,15 @@ function applyMove(board: Board, move: Move): Board {
 
   // Castling
   if (move.isCastling && piece.type === 'k') {
-    if (move.to.col === 6) {
+    if (move.to.col === 5) {
+      // Kingside: rook from h-file (7) to e-file (4)
       const rook = newBoard[move.from.row][7];
-      newBoard[move.from.row][5] = rook;
+      newBoard[move.from.row][4] = rook;
       newBoard[move.from.row][7] = null;
-    } else if (move.to.col === 2) {
+    } else if (move.to.col === 1) {
+      // Queenside: rook from a-file (0) to c-file (2)
       const rook = newBoard[move.from.row][0];
-      newBoard[move.from.row][3] = rook;
+      newBoard[move.from.row][2] = rook;
       newBoard[move.from.row][0] = null;
     }
   }
