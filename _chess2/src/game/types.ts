@@ -18,6 +18,7 @@ export interface Move {
   captured?: Piece;
   promotion?: PieceType;
   isCastling?: boolean;
+  isEnPassant?: boolean;
 }
 
 export type Board = (Piece | null)[][];

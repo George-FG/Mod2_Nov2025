@@ -24,6 +24,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameOptions }) => {
     isViewingHistory,
     canGoBack,
     canGoForward,
+    generatePGN,
   } = useChessGame(gameOptions);
   const [autoFlip, setAutoFlip] = useState(false);
   const [manualFlip, setManualFlip] = useState(false);
@@ -114,6 +115,16 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameOptions }) => {
       {gameOver && (
         <div className="gameover-notification">
           {gameOverMessage}
+          <button 
+            className="copy-pgn-button"
+            onClick={() => {
+              navigator.clipboard.writeText(generatePGN());
+              alert('PGN copied to clipboard!');
+            }}
+            style={{ marginLeft: '10px', padding: '5px 10px', cursor: 'pointer' }}
+          >
+            Copy PGN
+          </button>
         </div>
       )}
       <div className="chessboard">

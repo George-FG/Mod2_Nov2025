@@ -12,7 +12,8 @@ export function runMinimaxInWorker({
   depth, 
   maxTime,
   evaluation = 'balanced',
-  castlingRights
+  castlingRights,
+  positionHistory
 }: { 
   board: Board; 
   color: PieceColor; 
@@ -20,6 +21,7 @@ export function runMinimaxInWorker({
   maxTime: number;
   evaluation?: EvaluationType;
   castlingRights?: CastlingRights;
+  positionHistory?: string[];
 }): Promise<Move | null> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(
@@ -35,6 +37,6 @@ export function runMinimaxInWorker({
       reject(err);
       worker.terminate();
     };
-    worker.postMessage({ board, color, depth, maxTime, evaluation, castlingRights });
+    worker.postMessage({ board, color, depth, maxTime, evaluation, castlingRights, positionHistory });
   });
 }

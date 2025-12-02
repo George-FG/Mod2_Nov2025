@@ -157,7 +157,8 @@ export function myMinimaxMove(
     alpha: number,
     beta: number,
     currentCastlingRights: CastlingRights | undefined,
-    history: string[]
+    history: string[],
+    lastMove?: Move
   ): number {
     if (isTimeExpired()) return 0;
 
@@ -172,11 +173,11 @@ export function myMinimaxMove(
       if (ttEntry.flag === 'beta' && ttEntry.score >= beta) return ttEntry.score;
     }
 
-    if (depth === 0) {
+    if (depth <= 0) {
       return quiescence(board, sideToMove, alpha, beta, currentCastlingRights);
     }
 
-    const moves = getValidMovesForColor(board, sideToMove, currentCastlingRights);
+    const moves = getValidMovesForColor(board, sideToMove, currentCastlingRights, lastMove);
 
     if (moves.length === 0) {
       const inCheck = isKingInCheck(board, sideToMove);
@@ -224,17 +225,18 @@ export function myMinimaxMove(
 
       // --- Threefold repetition handling ---
       if (isThirdRepetition(newHash, history)) {
-        // Treat as draw-ish; small bias based on AI's static eval
+        // Treat as draw-ish; strong bias based on AI's static eval
         const evalFromAI = evaluate(newBoard, aiColor); // >0 good for AI
         let drawScoreForAI = 0;
 
         if (evalFromAI > 100) {
-          // AI is better → draw is slightly bad
-          drawScoreForAI = -30;
+          // AI is better → draw is very bad, avoid it!
+          drawScoreForAI = -10000;
         } else if (evalFromAI < -100) {
-          // AI is worse → draw is slightly good
-          drawScoreForAI = 30;
+          // AI is worse → draw is good, accept it
+          drawScoreForAI = 5000;
         } else {
+          // Position is roughly equal → draw is neutral
           drawScoreForAI = 0;
         }
 
@@ -244,15 +246,38 @@ export function myMinimaxMove(
         // Normal recursive search
         const newHistory = [...history, newHash];
 
-        score = -negamax(
-          newBoard,
-          nextColor,
-          depth - 1,
-          -beta,
-          -alpha,
-          newRights,
-          newHistory
-        );
+        // Check if opponent can force repetition after this move
+        const opponentCanDraw = opponentCanForceRepetition(newBoard, nextColor, newHistory, newRights);
+        
+        if (opponentCanDraw) {
+          // Opponent can force a draw - evaluate as a draw position
+          const evalFromAI = evaluate(newBoard, aiColor);
+          let drawScoreForAI = 0;
+
+          if (evalFromAI > 100) {
+            // AI is better → opponent forcing draw is bad
+            drawScoreForAI = -10000;
+          } else if (evalFromAI < -100) {
+            // AI is worse → opponent forcing draw is acceptable
+            drawScoreForAI = 5000;
+          } else {
+            drawScoreForAI = 0;
+          }
+
+          const sign = sideToMove === aiColor ? 1 : -1;
+          score = sign * drawScoreForAI;
+        } else {
+          score = -negamax(
+            newBoard,
+            nextColor,
+            depth - 1,
+            -beta,
+            -alpha,
+            newRights,
+            newHistory,
+            move
+          );
+        }
       }
 
       if (score > bestScore) {
@@ -292,11 +317,12 @@ export function myMinimaxMove(
     alpha: number,
     beta: number,
     currentCastlingRights: CastlingRights | undefined,
-    history: string[]
+    history: string[],
+    lastMove?: Move
   ): number {
     if (isTimeExpired()) return 0;
 
-    const moves = getValidMovesForColor(board, sideToMove, currentCastlingRights);
+    const moves = getValidMovesForColor(board, sideToMove, currentCastlingRights, lastMove);
 
     if (moves.length === 0) {
       const inCheck = isKingInCheck(board, sideToMove);
@@ -325,23 +351,38 @@ export function myMinimaxMove(
         const evalFromAI = evaluate(newBoard, aiColor);
         let drawScoreForAI = 0;
 
-        if (evalFromAI > 100) drawScoreForAI = -30;
-        else if (evalFromAI < -100) drawScoreForAI = 30;
+        if (evalFromAI > 100) drawScoreForAI = -10000;
+        else if (evalFromAI < -100) drawScoreForAI = 5000;
 
         const sign = sideToMove === aiColor ? 1 : -1;
         score = sign * drawScoreForAI;
       } else {
         const newHistory = [...history, newHash];
 
-        score = -negamax(
-          newBoard,
-          nextColor,
-          depth - 1,
-          -beta,
-          -alpha,
-          newRights,
-          newHistory
-        );
+        // Check if opponent can force repetition after this move
+        const opponentCanDraw = opponentCanForceRepetition(newBoard, nextColor, newHistory, newRights);
+        
+        if (opponentCanDraw) {
+          const evalFromAI = evaluate(newBoard, aiColor);
+          let drawScoreForAI = 0;
+
+          if (evalFromAI > 100) drawScoreForAI = -10000;
+          else if (evalFromAI < -100) drawScoreForAI = 5000;
+
+          const sign = sideToMove === aiColor ? 1 : -1;
+          score = sign * drawScoreForAI;
+        } else {
+          score = -negamax(
+            newBoard,
+            nextColor,
+            depth - 1,
+            -beta,
+            -alpha,
+            newRights,
+            newHistory,
+            move
+          );
+        }
       }
 
       if (score > bestScore) {
@@ -357,7 +398,7 @@ export function myMinimaxMove(
   }
 
   // Fallback: first legal move if nothing else
-  const allMoves = getValidMovesForColor(board, color, castlingRights);
+  const allMoves = getValidMovesForColor(board, color, castlingRights, undefined);
 
   if (allMoves.length > 0) {
     bestMoveAtRoot = allMoves[0];
@@ -369,7 +410,7 @@ export function myMinimaxMove(
 
     const previousBest = bestMoveAtRoot;
 
-    negamaxRoot(board, color, currentDepth, -Infinity, Infinity, castlingRights, baseHistory);
+    negamaxRoot(board, color, currentDepth, -Infinity, Infinity, castlingRights, baseHistory, undefined);
 
     if (isTimeExpired() && currentDepth > 1) {
       bestMoveAtRoot = previousBest;
@@ -386,7 +427,8 @@ export function myMinimaxMove(
 function getValidMovesForColor(
   board: Board,
   color: PieceColor,
-  castlingRights?: CastlingRights
+  castlingRights?: CastlingRights,
+  lastMove?: Move
 ): Move[] {
   const moves: Move[] = [];
 
@@ -397,7 +439,7 @@ function getValidMovesForColor(
       if (!piece || piece.color !== color) continue;
 
       const from: Position = { row, col };
-      const possibleMoves = getValidMoves(board, from, piece);
+      const possibleMoves = getValidMoves(board, from, piece, lastMove);
 
       // Filter out moves that would leave own king in check
       const legalMoves = possibleMoves.filter(
@@ -405,11 +447,16 @@ function getValidMovesForColor(
       );
 
       for (const to of legalMoves) {
+        const captured = board[to.row][to.col];
+        // Check if this is an en passant move
+        const isEnPassant = piece.type === 'p' && !captured && from.col !== to.col;
+        
         moves.push({
           from,
           to,
           piece,
-          captured: board[to.row][to.col] || undefined,
+          captured: captured || (isEnPassant && lastMove ? lastMove.piece : undefined),
+          isEnPassant,
         });
       }
 
@@ -536,6 +583,12 @@ function applyMove(board: Board, move: Move): Board {
     }
   }
 
+  // Handle en passant
+  if (move.isEnPassant && piece && piece.type === 'p') {
+    const capturedPawnRow = move.from.row;
+    newBoard[capturedPawnRow][move.to.col] = null;
+  }
+
   // Handle pawn promotion (always to queen for simplicity)
   if (piece && piece.type === 'p') {
     const promotionRow = piece.color === 'white' ? 7 : 0;
@@ -546,4 +599,30 @@ function applyMove(board: Board, move: Move): Board {
   }
 
   return newBoard;
+}
+
+/**
+ * Check if the opponent can force a draw by repetition on their next move.
+ * This checks if any opponent move would create a threefold repetition.
+ */
+function opponentCanForceRepetition(
+  board: Board,
+  opponentColor: PieceColor,
+  history: string[],
+  currentCastlingRights: CastlingRights | undefined
+): boolean {
+  const opponentMoves = getValidMovesForColor(board, opponentColor, currentCastlingRights);
+
+  for (const move of opponentMoves) {
+    const newBoard = applyMove(board, move);
+    const newRights = updateCastlingRights(currentCastlingRights, move, board);
+    const nextColor: PieceColor = opponentColor === 'white' ? 'black' : 'white';
+    const newHash = hashPosition(newBoard, nextColor, newRights);
+
+    if (isThirdRepetition(newHash, history)) {
+      return true;
+    }
+  }
+
+  return false;
 }

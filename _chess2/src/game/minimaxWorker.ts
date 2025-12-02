@@ -10,13 +10,14 @@ import type { Board, PieceColor, CastlingRights } from './types';
 type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2';
 
 self.onmessage = function(e: MessageEvent) {
-  const { board, color, depth, maxTime, evaluation = 'balanced', castlingRights } = e.data as {
+  const { board, color, depth, maxTime, evaluation = 'balanced', castlingRights, positionHistory } = e.data as {
     board: Board;
     color: PieceColor;
     depth: number;
     maxTime: number;
     evaluation?: EvaluationType;
     castlingRights?: CastlingRights;
+    positionHistory?: string[];
   };
 
   // Select evaluation function and algorithm based on strategy
@@ -24,7 +25,7 @@ self.onmessage = function(e: MessageEvent) {
 
   if (evaluation === 'attempt2') {
     // Use negamax with transposition table for attempt2
-    move = negamaxMove(board, color, depth, evaluateAttempt2, maxTime, castlingRights);
+    move = negamaxMove(board, color, depth, evaluateAttempt2, maxTime, castlingRights, positionHistory);
   } else {
     // Use standard minimax for other strategies
     let evaluateFunction;
@@ -45,7 +46,7 @@ self.onmessage = function(e: MessageEvent) {
         break;
     }
 
-    move = negamaxMove(board, color, depth, evaluateFunction, maxTime, castlingRights);
+    move = negamaxMove(board, color, depth, evaluateFunction, maxTime, castlingRights, positionHistory);
   }
 
   self.postMessage(move);

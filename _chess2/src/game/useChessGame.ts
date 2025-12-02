@@ -136,12 +136,23 @@ export const useChessGame = (options: GameOptions) => {
   ): GameState => {
     const newBoard: Board = state.board.map(row => [...row]);
     const piece = newBoard[from.row][from.col];
-    const captured = newBoard[to.row][to.col];
+    let captured = newBoard[to.row][to.col];
 
     if (!piece) return state;
 
     // Check if this is a castling move
     const isCastling = piece.type === 'k' && Math.abs(to.col - from.col) === 2;
+
+    // Check if this is an en passant move
+    let isEnPassant = false;
+    if (piece.type === 'p' && !captured && from.col !== to.col) {
+      // Pawn moved diagonally to empty square - must be en passant
+      isEnPassant = true;
+      // Capture the pawn that was passed
+      const capturedPawnRow = from.row;
+      captured = newBoard[capturedPawnRow][to.col];
+      newBoard[capturedPawnRow][to.col] = null;
+    }
 
     // Move the piece
     newBoard[to.row][to.col] = piece;
@@ -184,6 +195,7 @@ export const useChessGame = (options: GameOptions) => {
       captured: captured || undefined,
       promotion,
       isCastling,
+      isEnPassant,
     };
 
     // Calculate piece values for scoring
@@ -306,6 +318,12 @@ export const useChessGame = (options: GameOptions) => {
             board[m.from.row][0] = null;
           }
         }
+
+        // Handle en passant
+        if (m.isEnPassant) {
+          const capturedPawnRow = m.from.row;
+          board[capturedPawnRow][m.to.col] = null;
+        }
       }
 
       return board;
@@ -357,7 +375,8 @@ export const useChessGame = (options: GameOptions) => {
           return { ...newState, lastMoveTime: Date.now() };
         }        // If clicking on own piece, select it instead
         if (piece && piece.color === prev.currentPlayer) {
-          const allMoves = getValidMoves(prev.board, position, piece);
+          const lastMove = prev.moveHistory[prev.moveHistory.length - 1];
+          const allMoves = getValidMoves(prev.board, position, piece, lastMove);
 
           // Add castling moves for king
           if (piece.type === 'k') {
@@ -392,7 +411,8 @@ export const useChessGame = (options: GameOptions) => {
 
       // No square selected - select if it's the current player's piece
       if (piece && piece.color === prev.currentPlayer) {
-        const allMoves = getValidMoves(prev.board, position, piece);
+        const lastMove = prev.moveHistory[prev.moveHistory.length - 1];
+        const allMoves = getValidMoves(prev.board, position, piece, lastMove);
 
         // Add castling moves for king
         if (piece.type === 'k') {
@@ -463,8 +483,45 @@ export const useChessGame = (options: GameOptions) => {
     const currentBoard = gameState.board;
     const currentPlayer = gameState.currentPlayer;
     const castlingRights = gameState.castlingRights;
+    
+    // Build position history for repetition detection
+    const positionHistory: string[] = [];
+    const boardToString = (board: Board) =>
+      board.map(row => row.map(cell => cell ? cell.type + cell.color[0] : '.').join('')).join('/');
+    
+    // Add all previous positions from move history
+    const tempBoard = createInitialBoard();
+    positionHistory.push(boardToString(tempBoard));
+    
+    for (const move of gameState.moveHistory) {
+      const piece = tempBoard[move.from.row][move.from.col];
+      if (!piece) continue;
+      
+      tempBoard[move.to.row][move.to.col] = move.promotion ? { type: move.promotion, color: piece.color } : piece;
+      tempBoard[move.from.row][move.from.col] = null;
+      
+      if (move.isCastling) {
+        if (move.to.col === 5) {
+          const rook = tempBoard[move.from.row][7];
+          tempBoard[move.from.row][4] = rook;
+          tempBoard[move.from.row][7] = null;
+        } else if (move.to.col === 1) {
+          const rook = tempBoard[move.from.row][0];
+          tempBoard[move.from.row][2] = rook;
+          tempBoard[move.from.row][0] = null;
+        }
+      }
+      
+      if (move.isEnPassant) {
+        const capturedPawnRow = move.from.row;
+        tempBoard[capturedPawnRow][move.to.col] = null;
+      }
+      
+      positionHistory.push(boardToString(tempBoard));
+    }
+    
     // Use a real Web Worker for AI
-    const bestMove = await runMinimaxInWorker({ board: currentBoard, color: currentPlayer, depth, maxTime, evaluation, castlingRights });
+    const bestMove = await runMinimaxInWorker({ board: currentBoard, color: currentPlayer, depth, maxTime, evaluation, castlingRights, positionHistory });
 
     if (bestMove) {
       setGameState(current => {
@@ -477,7 +534,7 @@ export const useChessGame = (options: GameOptions) => {
         return { ...newState, lastMoveTime: Date.now() };
       });
     }
-  }, [gameState.currentPlayer, gameState.board, gameState.castlingRights, options.whitePlayer, options.blackPlayer, options.whiteAI, options.blackAI, gameStarted, makeMove]);
+  }, [gameState.currentPlayer, gameState.board, gameState.castlingRights, gameState.moveHistory, options.whitePlayer, options.blackPlayer, options.whiteAI, options.blackAI, gameStarted, makeMove]);
 
   // AI move trigger
   useEffect(() => {
@@ -527,6 +584,153 @@ export const useChessGame = (options: GameOptions) => {
   const displayBoard = historyIndex === -1 ? gameState.board : getBoardAtHistoryIndex(historyIndex);
   const isViewingHistory = historyIndex !== -1;
 
+  const generatePGN = useCallback((): string => {
+    const positionToAlgebraic = (pos: Position): string => {
+      const files = 'hgfedcba';
+      return files[pos.col] + (pos.row + 1);
+    };
+
+    const pieceSymbol = (type: PieceType): string => {
+      if (type === 'p') return '';
+      if (type === 'n') return 'N';
+      if (type === 'b') return 'B';
+      if (type === 'r') return 'R';
+      if (type === 'q') return 'Q';
+      if (type === 'k') return 'K';
+      return '';
+    };
+
+    const moveToAlgebraic = (move: Move, moveIndex: number): string => {
+      if (move.isCastling) {
+        return move.to.col === 1 ? 'O-O' : 'O-O-O';
+      }
+
+      let notation = pieceSymbol(move.piece.type);
+      
+      // Add disambiguation if needed (for non-pawns)
+      if (move.piece.type !== 'p' && move.piece.type !== 'k') {
+        // Check if other pieces of same type could move to same square
+        const boardBeforeMove = getBoardAtIndex(moveIndex);
+        const sameTypePieces: Position[] = [];
+        
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const p = boardBeforeMove[row][col];
+            if (p && p.type === move.piece.type && p.color === move.piece.color) {
+              const pos = { row, col };
+              // Skip the piece that actually made the move
+              if (pos.row === move.from.row && pos.col === move.from.col) continue;
+              
+              // Check if this piece could also move to the destination
+              const lastMoveForValidation = moveIndex > 0 ? gameState.moveHistory[moveIndex - 1] : undefined;
+              const possibleMoves = getValidMoves(boardBeforeMove, pos, p, lastMoveForValidation);
+              const canReachDestination = possibleMoves.some(m => m.row === move.to.row && m.col === move.to.col);
+              
+              if (canReachDestination) {
+                // Also check it wouldn't leave king in check
+                if (!wouldMoveResultInCheck(boardBeforeMove, pos, move.to, p.color)) {
+                  sameTypePieces.push(pos);
+                }
+              }
+            }
+          }
+        }
+        
+        if (sameTypePieces.length > 0) {
+          // Need disambiguation - add file and/or rank
+          const needsFile = !sameTypePieces.every(p => p.col === move.from.col);
+          const sameFileExists = sameTypePieces.some(p => p.col === move.from.col);
+          
+          if (needsFile) {
+            notation += 'hgfedcba'[move.from.col];
+          }
+          // Add rank if file alone isn't enough
+          if (!needsFile || sameFileExists) {
+            notation += (move.from.row + 1).toString();
+          }
+        }
+      }
+      
+      // Add capture notation
+      if (move.captured || move.isEnPassant) {
+        if (move.piece.type === 'p') {
+          notation = 'hgfedcba'[move.from.col];
+        }
+        notation += 'x';
+      }
+      
+      notation += positionToAlgebraic(move.to);
+      
+      // Add promotion
+      if (move.promotion) {
+        notation += '=' + pieceSymbol(move.promotion).toUpperCase();
+      }
+      
+      return notation;
+    };
+    
+    const getBoardAtIndex = (index: number): Board => {
+      if (index < 0) return createInitialBoard();
+      const moves = gameState.moveHistory.slice(0, index);
+      const board = createInitialBoard();
+      
+      for (const m of moves) {
+        const p = board[m.from.row][m.from.col];
+        if (!p) continue;
+        
+        board[m.to.row][m.to.col] = m.promotion ? { type: m.promotion, color: p.color } : p;
+        board[m.from.row][m.from.col] = null;
+        
+        if (m.isCastling) {
+          if (m.to.col === 5) {
+            const rook = board[m.from.row][7];
+            board[m.from.row][4] = rook;
+            board[m.from.row][7] = null;
+          } else if (m.to.col === 1) {
+            const rook = board[m.from.row][0];
+            board[m.from.row][2] = rook;
+            board[m.from.row][0] = null;
+          }
+        }
+        
+        if (m.isEnPassant) {
+          board[m.from.row][m.to.col] = null;
+        }
+      }
+      
+      return board;
+    };
+
+    // PGN Header
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, '.');
+    let pgn = `[Event "Chess Game"]\n`;
+    pgn += `[Site "Custom Chess App"]\n`;
+    pgn += `[Date "${date}"]\n`;
+    pgn += `[White "${options.whitePlayer === 'human' ? 'Human' : 'AI (' + (options.whiteAI?.evaluation || 'balanced') + ')'}" ]\n`;
+    pgn += `[Black "${options.blackPlayer === 'human' ? 'Human' : 'AI (' + (options.blackAI?.evaluation || 'balanced') + ')'}" ]\n`;
+    
+    let result = '*';
+    if (gameState.isCheckmate) {
+      result = gameState.currentPlayer === 'white' ? '0-1' : '1-0';
+    } else if (gameState.isStalemate) {
+      result = '1/2-1/2';
+    }
+    pgn += `[Result "${result}"]\n\n`;
+
+    // Moves
+    let movesText = '';
+    for (let i = 0; i < gameState.moveHistory.length; i++) {
+      const move = gameState.moveHistory[i];
+      if (i % 2 === 0) {
+        movesText += `${Math.floor(i / 2) + 1}. `;
+      }
+      movesText += moveToAlgebraic(move, i) + ' ';
+    }
+    pgn += movesText.trim() + ' ' + result;
+
+    return pgn;
+  }, [gameState.moveHistory, gameState.isCheckmate, gameState.isStalemate, gameState.currentPlayer, options]);
+
   return {
     gameState: { ...gameState, board: displayBoard },
     selectSquare,
@@ -544,5 +748,7 @@ export const useChessGame = (options: GameOptions) => {
     historyIndex,
     canGoBack: historyIndex > 0 || (historyIndex === -1 && gameState.moveHistory.length > 0),
     canGoForward: historyIndex !== -1 && historyIndex < gameState.moveHistory.length,
+    // PGN Export
+    generatePGN,
   };
 };
