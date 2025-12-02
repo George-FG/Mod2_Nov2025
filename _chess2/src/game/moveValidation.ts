@@ -181,7 +181,7 @@ export const getCastlingMoves = (
   const enemyColor: PieceColor = color === 'white' ? 'black' : 'white';
 
   // King must be on starting position
-  if (from.row !== row || from.col !== 4) return moves;
+  if (from.row !== row || from.col !== 3) return moves;
 
   // Cannot castle out of check
   if (isInCheck) return moves;
@@ -189,29 +189,29 @@ export const getCastlingMoves = (
   // King-side castling
   if (castlingRights.kingSide) {
     const rook = board[row][7];
-    const squaresBetween = [5, 6];
+    const squaresBetween = [4, 5];
     const allClear = squaresBetween.every(col => !board[row][col]);
     const notUnderAttack = squaresBetween.every(
       col => !isPositionUnderAttack(board, { row, col }, enemyColor)
     );
 
     if (rook && rook.type === 'r' && rook.color === color && allClear && notUnderAttack) {
-      moves.push({ row, col: 6 });
+      moves.push({ row, col: 5 });
     }
   }
 
   // Queen-side castling
   if (castlingRights.queenSide) {
     const rook = board[row][0];
-    const squaresBetween = [1, 2, 3];
-    const squaresNotUnderAttack = [2, 3];
+    const squaresBetween = [1, 2];
+    const squaresNotUnderAttack = [1, 2];
     const allClear = squaresBetween.every(col => !board[row][col]);
     const notUnderAttack = squaresNotUnderAttack.every(
       col => !isPositionUnderAttack(board, { row, col }, enemyColor)
     );
 
     if (rook && rook.type === 'r' && rook.color === color && allClear && notUnderAttack) {
-      moves.push({ row, col: 2 });
+      moves.push({ row, col: 1 });
     }
   }
 

@@ -278,10 +278,10 @@ export function evaluate(board: Board, color: PieceColor): number {
     const isWhite = me.color === 'white';
 
     const homeRank = isWhite ? 0 : 7;
-    const startFile = 4; // e-file
+    const startFile = 3; // d-file (king starting position)
     const onHomeRank = row === homeRank;
     const onStartSquare = onHomeRank && col === startFile;
-    const castled = onHomeRank && (col === 6 || col === 2);
+    const castled = onHomeRank && (col === 5 || col === 1);
 
     const mgWeight = 1.0 - egWeight; // middlegame weight
 

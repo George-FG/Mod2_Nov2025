@@ -149,17 +149,17 @@ export const useChessGame = (options: GameOptions) => {
 
     // Handle castling: move the rook
     if (isCastling) {
-      if (to.col === 6) {
+      if (to.col === 5) {
         // King-side castling
         const rook = newBoard[from.row][7];
 
-        newBoard[from.row][5] = rook;
+        newBoard[from.row][4] = rook;
         newBoard[from.row][7] = null;
-      } else if (to.col === 2) {
+      } else if (to.col === 1) {
         // Queen-side castling
         const rook = newBoard[from.row][0];
 
-        newBoard[from.row][3] = rook;
+        newBoard[from.row][2] = rook;
         newBoard[from.row][0] = null;
       }
     }
@@ -292,17 +292,17 @@ export const useChessGame = (options: GameOptions) => {
 
         // Handle castling
         if (m.isCastling) {
-          if (m.to.col === 6) {
+          if (m.to.col === 5) {
             // King-side
             const rook = board[m.from.row][7];
 
-            board[m.from.row][5] = rook;
+            board[m.from.row][4] = rook;
             board[m.from.row][7] = null;
-          } else if (m.to.col === 2) {
+          } else if (m.to.col === 1) {
             // Queen-side
             const rook = board[m.from.row][0];
 
-            board[m.from.row][3] = rook;
+            board[m.from.row][2] = rook;
             board[m.from.row][0] = null;
           }
         }

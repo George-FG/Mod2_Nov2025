@@ -273,17 +273,17 @@ function applyMove(board: Board, move: Move): Board {
 
   // Handle castling
   if (move.isCastling && piece && piece.type === 'k') {
-    if (move.to.col === 6) {
+    if (move.to.col === 5) {
       // King-side castling
       const rook = newBoard[move.from.row][7];
 
-      newBoard[move.from.row][5] = rook;
+      newBoard[move.from.row][4] = rook;
       newBoard[move.from.row][7] = null;
-    } else if (move.to.col === 2) {
+    } else if (move.to.col === 1) {
       // Queen-side castling
       const rook = newBoard[move.from.row][0];
 
-      newBoard[move.from.row][3] = rook;
+      newBoard[move.from.row][2] = rook;
       newBoard[move.from.row][0] = null;
     }
   }
