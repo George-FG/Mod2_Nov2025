@@ -1,5 +1,4 @@
 // Web Worker for chess minimax AI - runs in separate thread
-import { myMinimaxMove } from './myMinimax';
 import { myMinimaxMove as negamaxMove } from './negamax';
 import { simpleEvaluate } from './evaluate';
 import { evaluateOffensive } from './evaluateOffensive';
