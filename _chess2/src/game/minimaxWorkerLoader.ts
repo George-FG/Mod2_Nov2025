@@ -3,7 +3,7 @@
 
 import type { Board, PieceColor, Move, CastlingRights } from './types';
 
-export type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2';
+export type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2' | 'attempt3';
 
 // For Vite with module workers
 export function runMinimaxInWorker({ 
