@@ -1,4 +1,5 @@
 import type { Board, PieceColor } from './types';
+import { isCheckmate } from './evaluate';
 
 // ----------------- Basic piece values (centipawns) -----------------
 
@@ -95,6 +96,17 @@ function makeSide(color: PieceColor): SideStats {
 // ----------------------- Main evaluation ----------------------------
 
 export function evaluate(board: Board, color: PieceColor): number {
+  // Check for checkmate - if opponent is in checkmate, return maximum score
+  const opponentColor: PieceColor = color === 'white' ? 'black' : 'white';
+  if (isCheckmate(board, opponentColor)) {
+    return 100000; // Maximum score - we've won
+  }
+  
+  // Check if we are in checkmate - return minimum score
+  if (isCheckmate(board, color)) {
+    return -100000; // Minimum score - we've lost
+  }
+
   const white = makeSide('white');
   const black = makeSide('black');
 

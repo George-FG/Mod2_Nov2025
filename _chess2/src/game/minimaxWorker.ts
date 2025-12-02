@@ -5,9 +5,11 @@ import { evaluateOffensive } from './evaluateOffensive';
 import { evaluateDefensive } from './evaluateDefensive';
 import { evaluateSuicidal } from './evaluateSuicidal';
 import { evaluate as evaluateAttempt2 } from './evaluateAttempt2';
+import { evaluate as evaluateAttempt3 } from './evaluateAttempt3';
+import { myMinimaxMove as negamaxAttempt3 } from './negamaxAttempt3';
 import type { Board, PieceColor, CastlingRights } from './types';
 
-type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2';
+type EvaluationType = 'balanced' | 'offensive' | 'defensive' | 'suicidal' | 'attempt2' | 'attempt3';
 
 self.onmessage = function(e: MessageEvent) {
   const { board, color, depth, maxTime, evaluation = 'balanced', castlingRights, positionHistory } = e.data as {
@@ -23,7 +25,10 @@ self.onmessage = function(e: MessageEvent) {
   // Select evaluation function and algorithm based on strategy
   let move;
 
-  if (evaluation === 'attempt2') {
+  if (evaluation === 'attempt3') {
+    // Use optimized negamax with advanced search techniques for attempt3
+    move = negamaxAttempt3(board, color, depth, evaluateAttempt3, maxTime, castlingRights, positionHistory);
+  } else if (evaluation === 'attempt2') {
     // Use negamax with transposition table for attempt2
     move = negamaxMove(board, color, depth, evaluateAttempt2, maxTime, castlingRights, positionHistory);
   } else {

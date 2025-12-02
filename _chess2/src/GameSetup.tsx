@@ -3,7 +3,7 @@ import "./GameSetup.css";
 
 export type PlayerType = "human" | "ai";
 
-export type EvaluationType = "balanced" | "offensive" | "defensive" | "suicidal" | "attempt2";
+export type EvaluationType = "balanced" | "offensive" | "defensive" | "suicidal" | "attempt2" | "attempt3";
 
 export interface AISettings {
   depth: number;
@@ -89,6 +89,7 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
     defensive: 25,
     suicidal: 0,
     attempt2: 100,
+    attempt3: 150,
   };
 
   // Display names for evaluation types
@@ -98,6 +99,7 @@ const GameSetup: React.FC<GameSetupProps> = ({ onStartGame }) => {
     defensive: 'Defensive',
     suicidal: 'I Will Lose',
     attempt2: 'Pro',
+    attempt3: 'Elite',
   };
 
   // Helper to calculate total points for AI settings
