@@ -17,7 +17,7 @@ const W = {
   // Pawn structure
   doubledPawn: -12,
   isolatedPawn: -10,
-  centralPawnAdvance: 5,  // bonus for pawns on d/e files advanced a bit
+  centralPawnAdvance: 5,  // bonus for central pawns (d/e files) pushed a bit
   pawnAdvance: 2,         // small bonus for other pawn advances
 
   // Development / piece activity
@@ -27,18 +27,22 @@ const W = {
   centerBishop: 4,
   centerRook: 2,
   centerQueen: 2,
-
   bishopPair: 25,
 
-  // King safety (opening / middlegame)
-  castlingBonus: 120,         // strong preference to castle
-  kingCentralPenalty: -20,    // per file step from edge (b–g)
-  kingAdvancePenalty: -35,    // per rank away from home
-  kingShieldPenalty: -12,     // per missing pawn in front
-  kingMovedBeforeCastling: -400, // king off start square and not castled
+  // Piece defense
+  pawnDefendsPiece: 2,    // from simpleEvaluate
 
-  // King activity (pure endgame)
-  kingCenterEndgame: 8,       // bonus per step towards centre
+  // King safety (opening / middlegame)
+  castlingBonus: 40,              // moderate preference to castle
+  kingCentralPenalty: -8,         // per file step from edge (b–g)
+  kingAdvancePenalty: -15,        // per rank away from home
+  kingShieldPenalty: -6,          // per missing pawn in front
+  kingMovedBeforeCastling: -60,   // king off start square and not castled
+
+  // Endgame king activity
+  kingCenterEndgame: 8,       // encourage centre king in endgame (own PST-style)
+  oppKingEdgeEndgame: 10,     // push opponent king to edge (simpleEvaluate-style)
+  kingDistanceEndgame: 5,     // bring kings closer when winning
 };
 
 // ----------------- Helper types -------------------------------------
@@ -94,7 +98,11 @@ export function evaluate(board: Board, color: PieceColor): number {
   const white = makeSide('white');
   const black = makeSide('black');
 
-  // -------- First pass: material, simple piece activity, king pos, pawns ----
+  // For merged pawn-defense bonus
+  let whitePawnDefenseBonus = 0;
+  let blackPawnDefenseBonus = 0;
+
+  // -------- First pass: material, dev, central activity, king pos, pawns ----
 
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
@@ -176,12 +184,44 @@ export function evaluate(board: Board, color: PieceColor): number {
     }
   }
 
+  // -------- Pawn-defense bonus (from simpleEvaluate) --------------------
+  // Reward pieces that are defended by a pawn (simple diagonal backwards)
+
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (!piece || piece.type === 'k') continue;
+
+      const isWhite = piece.color === 'white';
+      const defRow = isWhite ? row - 1 : row + 1;
+
+      let defended = false;
+
+      if (defRow >= 0 && defRow < 8) {
+        // left diagonal
+        if (col > 0) {
+          const d = board[defRow][col - 1];
+          if (d && d.type === 'p' && d.color === piece.color) defended = true;
+        }
+        // right diagonal
+        if (!defended && col < 7) {
+          const d = board[defRow][col + 1];
+          if (d && d.type === 'p' && d.color === piece.color) defended = true;
+        }
+      }
+
+      if (defended) {
+        if (piece.color === 'white') whitePawnDefenseBonus += W.pawnDefendsPiece;
+        else blackPawnDefenseBonus += W.pawnDefendsPiece;
+      }
+    }
+  }
+
   // -------- Game phase detection ---------------------------------------
 
   const totalNonPawnMaterial = white.nonPawnMaterial + black.nonPawnMaterial;
-
-  // crude thresholds
-  const isEndgame = totalNonPawnMaterial <= 1000; // e.g. just a few minor pieces left
+  // Smooth endgame weight: 0 in opening (3900+), 1.0 when very low material (< 1300)
+  const endgameWeight = Math.max(0, Math.min(1, (2600 - totalNonPawnMaterial) / 1300));
 
   // -------- Pawn structure penalties / bonuses --------------------------
 
@@ -211,7 +251,7 @@ export function evaluate(board: Board, color: PieceColor): number {
     return score;
   }
 
-  // -------- Development / bishop pair ----------------------------------
+  // -------- Development / bishop pair / centre -------------------------
 
   function developmentAndPieces(me: SideStats): number {
     let score = 0;
@@ -227,9 +267,9 @@ export function evaluate(board: Board, color: PieceColor): number {
     return score;
   }
 
-  // -------- King safety / activity -------------------------------------
+  // -------- King safety / activity (smooth transition) ----------
 
-  function kingTerms(me: SideStats): number {
+  function kingTerms(me: SideStats, egWeight: number): number {
     let score = 0;
     if (me.kingRow === -1) return score;
 
@@ -243,25 +283,27 @@ export function evaluate(board: Board, color: PieceColor): number {
     const onStartSquare = onHomeRank && col === startFile;
     const castled = onHomeRank && (col === 6 || col === 2);
 
-    if (!isEndgame) {
-      // opening / middlegame: very strict
+    const mgWeight = 1.0 - egWeight; // middlegame weight
+
+    // Middlegame king safety (weighted down in endgame)
+    if (mgWeight > 0.1) {
       if (castled) {
-        score += W.castlingBonus;
+        score += W.castlingBonus * mgWeight;
       } else {
-        // If king left starting square and is not castled: huge penalty
+        // If king left starting square and is not castled: penalty
         if (!onStartSquare) {
-          score += W.kingMovedBeforeCastling;
+          score += W.kingMovedBeforeCastling * mgWeight;
         }
 
         // central file penalty (b–g bad)
         const fileFromEdge = Math.min(col, 7 - col); // 0 on a/h, 3 in centre
-        score += fileFromEdge * W.kingCentralPenalty;
+        score += fileFromEdge * W.kingCentralPenalty * mgWeight;
 
         // rank advance penalty (walking up the board)
         const ranksAdvanced = isWhite
           ? Math.max(0, row - homeRank)
           : Math.max(0, homeRank - row);
-        score += ranksAdvanced * W.kingAdvancePenalty;
+        score += ranksAdvanced * W.kingAdvancePenalty * mgWeight;
 
         // pawn shield in front of king
         const pawnRow = isWhite ? row + 1 : row - 1;
@@ -270,41 +312,78 @@ export function evaluate(board: Board, color: PieceColor): number {
             const c = col + dc;
             if (c < 0 || c > 7) continue;
 
-            // check if there is a pawn of same color there
             const front = board[pawnRow][c];
             if (!front || front.type !== 'p' || front.color !== me.color) {
-              score += W.kingShieldPenalty;
+              score += W.kingShieldPenalty * mgWeight;
             }
           }
         }
       }
-    } else {
-      // pure endgame: encourage king centralization
+    }
+
+    // Endgame: encourage king centralization (weighted up in endgame)
+    if (egWeight > 0.1) {
       const distFile = Math.abs(col - 3.5);
       const distRank = Math.abs(row - 3.5);
       const centerDist = Math.max(distFile, distRank);
       const centerBonus = (3.5 - centerDist) * W.kingCenterEndgame;
-      score += centerBonus;
+      score += centerBonus * egWeight;
     }
+
+    return score;
+  }
+
+  // -------- Endgame king race terms (from simpleEvaluate) -------------
+
+  function endgameKingRace(
+    me: SideStats,
+    opp: SideStats
+  ): number {
+    if (me.kingRow === -1 || opp.kingRow === -1) return 0;
+
+    const oppKingCenterDist = Math.max(
+      Math.abs(opp.kingRow - 3.5),
+      Math.abs(opp.kingCol - 3.5)
+    );
+    const kingDist =
+      Math.abs(me.kingRow - opp.kingRow) +
+      Math.abs(me.kingCol - opp.kingCol);
+
+    let score = 0;
+    score += oppKingCenterDist * W.oppKingEdgeEndgame;
+    score += (14 - kingDist) * W.kingDistanceEndgame; // 14 = max manhattan
 
     return score;
   }
 
   // -------- Combine for each side --------------------------------------
 
-  function evalSide(me: SideStats): number {
+  function baseEvalSide(me: SideStats, pawnDefenseBonus: number, egWeight: number): number {
     let s = 0;
 
     s += me.material;
     s += pawnStructure(me);
     s += developmentAndPieces(me);
-    s += kingTerms(me);
+    s += kingTerms(me, egWeight);
+    s += pawnDefenseBonus;
 
     return s;
   }
 
-  const whiteScore = evalSide(white);
-  const blackScore = evalSide(black);
+  const whiteBase = baseEvalSide(white, whitePawnDefenseBonus, endgameWeight);
+  const blackBase = baseEvalSide(black, blackPawnDefenseBonus, endgameWeight);
+
+  let whiteScore = whiteBase;
+  let blackScore = blackBase;
+
+  // Add relational endgame king terms when in endgame and one side is winning
+  if (endgameWeight > 0.5) {
+    if (whiteBase > blackBase + 100) {
+      whiteScore += endgameKingRace(white, black) * endgameWeight;
+    } else if (blackBase > whiteBase + 100) {
+      blackScore += endgameKingRace(black, white) * endgameWeight;
+    }
+  }
 
   const diff = whiteScore - blackScore;
 
