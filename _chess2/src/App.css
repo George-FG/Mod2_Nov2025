@@ -1,0 +1,42 @@
+
+html, body, #root {
+	width: 100vw;
+	height: 100vh;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	box-sizing: border-box;
+}
+
+.app-header {
+	text-align: center;
+	margin-top: 1.5rem;
+	position: relative;
+}
+
+.app-header h1 {
+	margin: 0;
+}
+
+.new-game-button {
+	position: absolute;
+	left: 1rem;
+	top: 0;
+	padding: 0.5rem 1rem;
+	background: #667eea;
+	color: white;
+	border: none;
+	border-radius: 5px;
+	cursor: pointer;
+	font-weight: bold;
+}
+
+.new-game-button:hover {
+	background: #5568d3;
+}
+
+.game-info {
+	font-size: 0.9rem;
+	color: #666;
+	margin-top: 0.5rem;
+}

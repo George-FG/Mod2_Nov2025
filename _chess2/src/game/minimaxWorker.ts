@@ -46,7 +46,7 @@ self.onmessage = function(e: MessageEvent) {
         break;
     }
 
-    move = myMinimaxMove(board, color, depth, evaluateFunction, maxTime, castlingRights);
+    move = negamaxMove(board, color, depth, evaluateFunction, maxTime, castlingRights);
   }
 
   self.postMessage(move);
