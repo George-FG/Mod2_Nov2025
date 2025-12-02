@@ -30,9 +30,37 @@ function hashPosition(
 }
 
 /**
+ * Check if adding this position key would create a threefold repetition.
+ * We assume `history` contains all previous position keys (including current).
+ */
+function isThirdRepetition(
+  newKey: string,
+  history: string[]
+): boolean {
+  let count = 0;
+
+  for (const k of history) {
+    if (k === newKey) {
+      count++;
+      if (count >= 2) {
+        // Two previous occurrences; playing this move would be the 3rd
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Main entry point: choose the best move for `color` using negamax,
  * alpha-beta pruning, quiescence search, a transposition table, and
  * iterative deepening.
+ *
+ * `positionHistory` (optional) should be an array of position hashes for the
+ * current game so far (including previous moves). If you don't have that,
+ * you can ignore it; the engine will still avoid immediate repetition cycles
+ * visible inside the search tree itself.
  */
 export function myMinimaxMove(
   board: Board,
@@ -40,7 +68,8 @@ export function myMinimaxMove(
   depth: number,
   evaluate: (board: Board, color: PieceColor) => number,
   maxTime?: number,
-  castlingRights?: CastlingRights
+  castlingRights?: CastlingRights,
+  positionHistory?: string[]
 ): Move | null {
   const startTime = Date.now();
   const aiColor = color;
@@ -51,12 +80,15 @@ export function myMinimaxMove(
   let bestMoveAtRoot: Move | null = null;
   let timeExpired = false;
 
+  // Build initial history: caller history + current position
+  const baseHistory: string[] = positionHistory ? [...positionHistory] : [];
+  baseHistory.push(hashPosition(board, color, castlingRights));
+
   function isTimeExpired(): boolean {
     if (timeExpired) return true;
 
     if (maxTime !== undefined && Date.now() - startTime > maxTime) {
       timeExpired = true;
-
       return true;
     }
 
@@ -65,13 +97,14 @@ export function myMinimaxMove(
 
   /**
    * Quiescence search: extend search at leaf nodes, but only along captures.
+   * We don't bother with threefold here; the main tree already handles it.
    */
   function quiescence(
     board: Board,
     sideToMove: PieceColor,
     alpha: number,
     beta: number,
-    currentCastlingRights?: CastlingRights
+    currentCastlingRights: CastlingRights | undefined
   ): number {
     if (isTimeExpired()) return 0;
 
@@ -123,7 +156,8 @@ export function myMinimaxMove(
     depth: number,
     alpha: number,
     beta: number,
-    currentCastlingRights?: CastlingRights
+    currentCastlingRights: CastlingRights | undefined,
+    history: string[]
   ): number {
     if (isTimeExpired()) return 0;
 
@@ -168,7 +202,6 @@ export function myMinimaxMove(
 
       if (idx >= 0) {
         const [mv] = moves.splice(idx, 1);
-
         moves.unshift(mv);
       }
     }
@@ -185,15 +218,42 @@ export function myMinimaxMove(
 
       const newBoard = applyMove(board, move);
       const newRights = updateCastlingRights(currentCastlingRights, move, board);
+      const newHash = hashPosition(newBoard, nextColor, newRights);
 
-      const score = -negamax(
-        newBoard,
-        nextColor,
-        depth - 1,
-        -beta,
-        -alpha,
-        newRights
-      );
+      let score: number;
+
+      // --- Threefold repetition handling ---
+      if (isThirdRepetition(newHash, history)) {
+        // Treat as draw-ish; small bias based on AI's static eval
+        const evalFromAI = evaluate(newBoard, aiColor); // >0 good for AI
+        let drawScoreForAI = 0;
+
+        if (evalFromAI > 100) {
+          // AI is better → draw is slightly bad
+          drawScoreForAI = -30;
+        } else if (evalFromAI < -100) {
+          // AI is worse → draw is slightly good
+          drawScoreForAI = 30;
+        } else {
+          drawScoreForAI = 0;
+        }
+
+        const sign = sideToMove === aiColor ? 1 : -1;
+        score = sign * drawScoreForAI;
+      } else {
+        // Normal recursive search
+        const newHistory = [...history, newHash];
+
+        score = -negamax(
+          newBoard,
+          nextColor,
+          depth - 1,
+          -beta,
+          -alpha,
+          newRights,
+          newHistory
+        );
+      }
 
       if (score > bestScore) {
         bestScore = score;
@@ -231,7 +291,8 @@ export function myMinimaxMove(
     depth: number,
     alpha: number,
     beta: number,
-    currentCastlingRights?: CastlingRights
+    currentCastlingRights: CastlingRights | undefined,
+    history: string[]
   ): number {
     if (isTimeExpired()) return 0;
 
@@ -256,15 +317,32 @@ export function myMinimaxMove(
 
       const newBoard = applyMove(board, move);
       const newRights = updateCastlingRights(currentCastlingRights, move, board);
+      const newHash = hashPosition(newBoard, nextColor, newRights);
 
-      const score = -negamax(
-        newBoard,
-        nextColor,
-        depth - 1,
-        -beta,
-        -alpha,
-        newRights
-      );
+      let score: number;
+
+      if (isThirdRepetition(newHash, history)) {
+        const evalFromAI = evaluate(newBoard, aiColor);
+        let drawScoreForAI = 0;
+
+        if (evalFromAI > 100) drawScoreForAI = -30;
+        else if (evalFromAI < -100) drawScoreForAI = 30;
+
+        const sign = sideToMove === aiColor ? 1 : -1;
+        score = sign * drawScoreForAI;
+      } else {
+        const newHistory = [...history, newHash];
+
+        score = -negamax(
+          newBoard,
+          nextColor,
+          depth - 1,
+          -beta,
+          -alpha,
+          newRights,
+          newHistory
+        );
+      }
 
       if (score > bestScore) {
         bestScore = score;
@@ -291,7 +369,7 @@ export function myMinimaxMove(
 
     const previousBest = bestMoveAtRoot;
 
-    negamaxRoot(board, color, currentDepth, -Infinity, Infinity, castlingRights);
+    negamaxRoot(board, color, currentDepth, -Infinity, Infinity, castlingRights, baseHistory);
 
     if (isTimeExpired() && currentDepth > 1) {
       bestMoveAtRoot = previousBest;
@@ -363,25 +441,25 @@ function getValidMovesForColor(
     }
   }
 
+  // Improved move ordering
   moves.sort((a, b) => {
-  // 1. Captures first
-  const aCap = a.captured ? 1 : 0;
-  const bCap = b.captured ? 1 : 0;
-  if (aCap !== bCap) return bCap - aCap;
+    // 1. Captures first
+    const aCap = a.captured ? 1 : 0;
+    const bCap = b.captured ? 1 : 0;
+    if (aCap !== bCap) return bCap - aCap;
 
-  // 2. Castling moves early (good king moves)
-  const aCastle = a.isCastling ? 1 : 0;
-  const bCastle = b.isCastling ? 1 : 0;
-  if (aCastle !== bCastle) return bCastle - aCastle;
+    // 2. Castling moves early (good king moves)
+    const aCastle = a.isCastling ? 1 : 0;
+    const bCastle = b.isCastling ? 1 : 0;
+    if (aCastle !== bCastle) return bCastle - aCastle;
 
-  // 3. Non-king moves before king moves
-  const aKing = a.piece.type === 'k' ? 1 : 0;
-  const bKing = b.piece.type === 'k' ? 1 : 0;
-  if (aKing !== bKing) return aKing - bKing;
+    // 3. Non-king moves before king moves
+    const aKing = a.piece.type === 'k' ? 1 : 0;
+    const bKing = b.piece.type === 'k' ? 1 : 0;
+    if (aKing !== bKing) return aKing - bKing;
 
-  return 0;
-});
-
+    return 0;
+  });
 
   return moves;
 }
