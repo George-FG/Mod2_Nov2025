@@ -2,6 +2,7 @@ import type { Board, PieceColor, Move, Position, CastlingRights, PieceType } fro
 import { getValidMoves, wouldMoveResultInCheck, isKingInCheck, getCastlingMoves } from './moveValidation';
 
 // ==================== PIECE VALUES (for MVV-LVA) ====================
+
 const PIECE_VALUES: Record<PieceType, number> = {
   p: 100,
   n: 320,
@@ -12,6 +13,7 @@ const PIECE_VALUES: Record<PieceType, number> = {
 };
 
 // ==================== TRANSPOSITION TABLE ====================
+
 type TTEntry = {
   depth: number;
   score: number;
@@ -20,7 +22,7 @@ type TTEntry = {
   age: number;
 };
 
-const MAX_TT_SIZE = 1000000; // Limit TT size
+const MAX_TT_SIZE = 1_000_000;
 const transpositionTable = new Map<string, TTEntry>();
 let currentAge = 0;
 
@@ -43,17 +45,15 @@ function storeTT(
   flag: TTEntry['flag'],
   bestMove?: Move
 ): void {
-  // Limit TT size
   if (transpositionTable.size >= MAX_TT_SIZE) {
-    // Remove oldest entries
-    const entriesToRemove: string[] = [];
+    const toRemove: string[] = [];
     for (const [key, entry] of transpositionTable) {
       if (entry.age < currentAge - 2) {
-        entriesToRemove.push(key);
+        toRemove.push(key);
       }
-      if (entriesToRemove.length > MAX_TT_SIZE / 10) break;
+      if (toRemove.length > MAX_TT_SIZE / 10) break;
     }
-    entriesToRemove.forEach(key => transpositionTable.delete(key));
+    toRemove.forEach(key => transpositionTable.delete(key));
   }
 
   transpositionTable.set(hash, {
@@ -65,7 +65,24 @@ function storeTT(
   });
 }
 
+// ==================== REPETITION DETECTION ====================
+
+function isThirdRepetition(key: string, history: string[]): boolean {
+  let count = 0;
+  for (const h of history) {
+    if (h === key) {
+      count++;
+      if (count >= 2) {
+        // two previous occurrences; this would be the 3rd
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // ==================== KILLER MOVES & HISTORY HEURISTIC ====================
+
 const killerMoves: Move[][] = Array.from({ length: 100 }, () => []);
 const historyTable: number[][][][] = Array.from({ length: 8 }, () =>
   Array.from({ length: 8 }, () =>
@@ -81,21 +98,19 @@ function clearKillers(): void {
 
 function storeKiller(move: Move, ply: number): void {
   if (ply >= killerMoves.length) return;
-  
-  // Don't store captures as killers
-  if (move.captured) return;
+  if (move.captured) return; // only store quiet moves as killers
 
   const killers = killerMoves[ply];
-  
-  // Don't duplicate
-  if (killers.some(k => 
-    k.from.row === move.from.row && 
-    k.from.col === move.from.col && 
-    k.to.row === move.to.row && 
-    k.to.col === move.to.col
-  )) return;
 
-  // Keep only 2 killers per ply
+  if (killers.some(k =>
+    k.from.row === move.from.row &&
+    k.from.col === move.from.col &&
+    k.to.row === move.to.row &&
+    k.to.col === move.to.col
+  )) {
+    return;
+  }
+
   killers.unshift(move);
   if (killers.length > 2) killers.pop();
 }
@@ -106,42 +121,43 @@ function updateHistory(move: Move, depth: number): void {
 }
 
 // ==================== MOVE ORDERING ====================
+
 function scoreMove(move: Move, ply: number, ttBestMove?: Move): number {
-  // 1. TT best move
-  if (ttBestMove && 
+  // TT best move
+  if (ttBestMove &&
       ttBestMove.from.row === move.from.row &&
       ttBestMove.from.col === move.from.col &&
       ttBestMove.to.row === move.to.row &&
       ttBestMove.to.col === move.to.col) {
-    return 1000000;
+    return 1_000_000;
   }
 
-  // 2. Captures (MVV-LVA: Most Valuable Victim - Least Valuable Attacker)
+  // Captures (MVV-LVA)
   if (move.captured) {
     const victimValue = PIECE_VALUES[move.captured.type];
     const attackerValue = PIECE_VALUES[move.piece.type];
-    return 100000 + (victimValue * 10 - attackerValue);
+    return 100_000 + (victimValue * 10 - attackerValue);
   }
 
-  // 3. Promotions
+  // Promotions
   if (move.promotion) {
-    return 90000 + PIECE_VALUES[move.promotion];
+    return 90_000 + PIECE_VALUES[move.promotion];
   }
 
-  // 4. Killer moves
+  // Killer moves
   if (ply < killerMoves.length) {
     const killers = killerMoves[ply];
-    const killerIndex = killers.findIndex(k => 
-      k.from.row === move.from.row && 
-      k.from.col === move.from.col && 
-      k.to.row === move.to.row && 
+    const idx = killers.findIndex(k =>
+      k.from.row === move.from.row &&
+      k.from.col === move.from.col &&
+      k.to.row === move.to.row &&
       k.to.col === move.to.col
     );
-    if (killerIndex === 0) return 80000;
-    if (killerIndex === 1) return 70000;
+    if (idx === 0) return 80_000;
+    if (idx === 1) return 70_000;
   }
 
-  // 5. History heuristic
+  // History heuristic
   return historyTable[move.from.row][move.from.col][move.to.row][move.to.col];
 }
 
@@ -161,7 +177,7 @@ export function myMinimaxMove(
   positionHistory?: string[]
 ): Move | null {
   const startTime = Date.now();
-  //const aiColor = color;
+  const rootColor = color;
 
   currentAge++;
   clearKillers();
@@ -169,6 +185,7 @@ export function myMinimaxMove(
   let bestMoveAtRoot: Move | null = null;
   let timeExpired = false;
 
+  // History of positions so far (from caller), plus current
   const baseHistory: string[] = positionHistory ? [...positionHistory] : [];
   baseHistory.push(hashPosition(board, color, castlingRights));
 
@@ -181,9 +198,8 @@ export function myMinimaxMove(
     return false;
   }
 
-  /**
-   * Quiescence search: only search captures to avoid horizon effect
-   */
+  // ---------- Quiescence search (captures only) ----------
+
   function quiescence(
     board: Board,
     sideToMove: PieceColor,
@@ -193,15 +209,17 @@ export function myMinimaxMove(
   ): number {
     if (isTimeExpired()) return 0;
 
-    const standPat = evaluate(board, sideToMove);
+    // Always evaluate from rootColor perspective and flip sign by sideToMove
+    const sign = sideToMove === rootColor ? 1 : -1;
+    const standPatRoot = evaluate(board, rootColor);
+    const standPat = sign * standPatRoot;
 
     if (standPat >= beta) return beta;
-    if (alpha < standPat) alpha = standPat;
+    if (standPat > alpha) alpha = standPat;
 
     const moves = getValidMovesForColor(board, sideToMove, currentCastlingRights);
     const captures = moves.filter(m => m.captured);
 
-    // Sort captures by MVV-LVA
     captures.sort((a, b) => {
       const aScore = PIECE_VALUES[a.captured!.type] * 10 - PIECE_VALUES[a.piece.type];
       const bScore = PIECE_VALUES[b.captured!.type] * 10 - PIECE_VALUES[b.piece.type];
@@ -225,9 +243,8 @@ export function myMinimaxMove(
     return alpha;
   }
 
-  /**
-   * Negamax with alpha-beta, null move pruning, and LMR
-   */
+  // ---------- Negamax with alpha-beta, null-move, LMR, TT, repetition ----------
+
   function negamax(
     board: Board,
     sideToMove: PieceColor,
@@ -236,7 +253,8 @@ export function myMinimaxMove(
     beta: number,
     currentCastlingRights: CastlingRights | undefined,
     ply: number,
-    allowNull: boolean
+    allowNull: boolean,
+    history: string[]
   ): number {
     if (isTimeExpired()) return 0;
 
@@ -244,8 +262,9 @@ export function myMinimaxMove(
     const alphaOrig = alpha;
     const ttEntry = transpositionTable.get(hash);
 
+    const mateValue = 100_000;
+
     // Mate distance pruning
-    const mateValue = 100000;
     alpha = Math.max(alpha, -mateValue + ply);
     beta = Math.min(beta, mateValue - ply - 1);
     if (alpha >= beta) return alpha;
@@ -257,14 +276,13 @@ export function myMinimaxMove(
       if (ttEntry.flag === 'beta' && ttEntry.score >= beta) return ttEntry.score;
     }
 
-    // Leaf node: quiescence search
+    // Leaf: quiescence
     if (depth <= 0) {
       return quiescence(board, sideToMove, alpha, beta, currentCastlingRights);
     }
 
     const moves = getValidMovesForColor(board, sideToMove, currentCastlingRights);
 
-    // Terminal position check
     if (moves.length === 0) {
       const inCheck = isKingInCheck(board, sideToMove);
       return inCheck ? -mateValue + ply : 0;
@@ -272,11 +290,11 @@ export function myMinimaxMove(
 
     const inCheck = isKingInCheck(board, sideToMove);
 
-    // Null move pruning: if we can pass and still beat beta, position is too good
+    // Null-move pruning
     if (allowNull && !inCheck && depth >= 3) {
-      const R = 2; // Reduction depth
+      const R = 2;
       const nextColor: PieceColor = sideToMove === 'white' ? 'black' : 'white';
-      
+
       const nullScore = -negamax(
         board,
         nextColor,
@@ -285,15 +303,15 @@ export function myMinimaxMove(
         -beta + 1,
         currentCastlingRights,
         ply + 1,
-        false
+        false,
+        history
       );
 
       if (nullScore >= beta) {
-        return beta; // Fail-high on null move
+        return beta;
       }
     }
 
-    // Move ordering
     orderMoves(moves, ply, ttEntry?.bestMove);
 
     let bestScore = -Infinity;
@@ -306,40 +324,30 @@ export function myMinimaxMove(
 
       const newBoard = applyMove(board, move);
       const newRights = updateCastlingRights(currentCastlingRights, move, board);
+      const newHash = hashPosition(newBoard, nextColor, newRights);
 
       let score: number;
 
-      // Late Move Reduction (LMR): reduce depth for later moves
-      const isLateMove = movesSearched >= 4 && depth >= 3 && !inCheck && !move.captured;
-      const reduction = isLateMove ? 1 : 0;
+      // Threefold repetition: treat as near-draw with side-to-move perspective
+      if (isThirdRepetition(newHash, history)) {
+        const evalFromRoot = evaluate(newBoard, rootColor);
+        const sign = sideToMove === rootColor ? 1 : -1;
+        const evalFromSide = sign * evalFromRoot;
 
-      if (movesSearched === 0) {
-        // Full-depth search on first move
-        score = -negamax(
-          newBoard,
-          nextColor,
-          depth - 1,
-          -beta,
-          -alpha,
-          newRights,
-          ply + 1,
-          true
-        );
+        let drawScore = 0;
+        if (evalFromSide > 100) drawScore = -30;     // better side dislikes draw
+        else if (evalFromSide < -100) drawScore = 30; // worse side likes draw
+
+        score = drawScore;
       } else {
-        // Late move reduction
-        score = -negamax(
-          newBoard,
-          nextColor,
-          depth - 1 - reduction,
-          -alpha - 1,
-          -alpha,
-          newRights,
-          ply + 1,
-          true
-        );
+        const newHistory = [...history, newHash];
 
-        // Re-search if LMR failed high
-        if (score > alpha && reduction > 0) {
+        // Late Move Reduction: reduce depth for later quiet moves
+        const isLateMove = movesSearched >= 4 && depth >= 3 && !inCheck && !move.captured && !move.promotion;
+        const reduction = isLateMove ? 1 : 0;
+
+        if (movesSearched === 0) {
+          // First move: full search with full window
           score = -negamax(
             newBoard,
             nextColor,
@@ -348,8 +356,37 @@ export function myMinimaxMove(
             -alpha,
             newRights,
             ply + 1,
-            true
+            true,
+            newHistory
           );
+        } else {
+          // Later moves: search with reduced depth if applicable
+          score = -negamax(
+            newBoard,
+            nextColor,
+            depth - 1 - reduction,
+            -beta,
+            -alpha,
+            newRights,
+            ply + 1,
+            true,
+            newHistory
+          );
+
+          // If LMR was applied and score looks good, re-search at full depth
+          if (reduction > 0 && score > alpha) {
+            score = -negamax(
+              newBoard,
+              nextColor,
+              depth - 1,
+              -beta,
+              -alpha,
+              newRights,
+              ply + 1,
+              true,
+              newHistory
+            );
+          }
         }
       }
 
@@ -362,18 +399,15 @@ export function myMinimaxMove(
 
       if (bestScore > alpha) {
         alpha = bestScore;
-
-        // Store killer move
         if (!move.captured) {
           storeKiller(move, ply);
           updateHistory(move, depth);
         }
       }
 
-      if (alpha >= beta) break; // Beta cutoff
+      if (alpha >= beta) break;
     }
 
-    // Store in TT
     if (!isTimeExpired()) {
       let flag: TTEntry['flag'] = 'exact';
       if (bestScore <= alphaOrig) flag = 'alpha';
@@ -385,23 +419,22 @@ export function myMinimaxMove(
     return bestScore;
   }
 
-  /**
-   * Root search with aspiration windows
-   */
-  function searchRoot(depth: number): Move | null {
+  // ---------- Root search with aspiration windows + repetition ----------
+
+  function searchRoot(depth: number, history: string[]): Move | null {
     if (isTimeExpired()) return bestMoveAtRoot;
 
     const moves = getValidMovesForColor(board, color, castlingRights);
     if (moves.length === 0) return null;
 
-    orderMoves(moves, 0, transpositionTable.get(hashPosition(board, color, castlingRights))?.bestMove);
+    const ttRoot = transpositionTable.get(hashPosition(board, color, castlingRights));
+    orderMoves(moves, 0, ttRoot?.bestMove);
 
     let alpha = -Infinity;
     let beta = Infinity;
 
-    // Aspiration windows for depths > 3
     if (depth > 3 && bestMoveAtRoot) {
-      const previousScore = evaluate(board, color);
+      const previousScore = evaluate(board, rootColor);
       const window = 50;
       alpha = previousScore - window;
       beta = previousScore + window;
@@ -415,30 +448,49 @@ export function myMinimaxMove(
 
       const newBoard = applyMove(board, move);
       const newRights = updateCastlingRights(castlingRights, move, board);
+      const newHash = hashPosition(newBoard, nextColor, newRights);
 
-      let score = -negamax(
-        newBoard,
-        nextColor,
-        depth - 1,
-        -beta,
-        -alpha,
-        newRights,
-        1,
-        true
-      );
+      let score: number;
 
-      // Re-search with wider window if aspiration failed
-      if ((score <= alpha || score >= beta) && depth > 3) {
+      if (isThirdRepetition(newHash, history)) {
+        const evalFromRoot = evaluate(newBoard, rootColor);
+        const sign = color === rootColor ? 1 : -1; // usually 1, but explicit
+        const evalFromSide = sign * evalFromRoot;
+
+        let drawScore = 0;
+        if (evalFromSide > 100) drawScore = -30;
+        else if (evalFromSide < -100) drawScore = 30;
+
+        score = drawScore;
+      } else {
+        const newHistory = [...history, newHash];
+
         score = -negamax(
           newBoard,
           nextColor,
           depth - 1,
-          -Infinity,
-          Infinity,
+          -beta,
+          -alpha,
           newRights,
           1,
-          true
+          true,
+          newHistory
         );
+
+        // aspiration re-search if fail-low / fail-high
+        if ((score <= alpha || score >= beta) && depth > 3) {
+          score = -negamax(
+            newBoard,
+            nextColor,
+            depth - 1,
+            -Infinity,
+            Infinity,
+            newRights,
+            1,
+            true,
+            newHistory
+          );
+        }
       }
 
       if (score > bestScore) {
@@ -453,30 +505,29 @@ export function myMinimaxMove(
     return bestMoveAtRoot;
   }
 
-  // Fallback: first legal move
+  // ---------- Fallback and iterative deepening ----------
+
   const allMoves = getValidMovesForColor(board, color, castlingRights);
   if (allMoves.length > 0) {
     bestMoveAtRoot = allMoves[0];
   }
 
-  // Iterative deepening
   for (let currentDepth = 1; currentDepth <= depth; currentDepth++) {
     if (isTimeExpired()) break;
 
     const previousBest = bestMoveAtRoot;
-    searchRoot(currentDepth);
+    searchRoot(currentDepth, baseHistory);
 
     if (isTimeExpired() && currentDepth > 1) {
       bestMoveAtRoot = previousBest;
       break;
     }
 
-    // Early exit if mate found
     if (bestMoveAtRoot) {
       const hash = hashPosition(board, color, castlingRights);
       const entry = transpositionTable.get(hash);
-      if (entry && Math.abs(entry.score) > 99000) {
-        break; // Mate found
+      if (entry && Math.abs(entry.score) > 99_000) {
+        break; // mate found
       }
     }
   }
@@ -516,7 +567,6 @@ function getValidMovesForColor(
         });
       }
 
-      // Add castling
       if (piece.type === 'k' && castlingRights) {
         const rights = {
           kingSide: color === 'white' ? castlingRights.whiteKingSide : castlingRights.blackKingSide,
@@ -552,12 +602,12 @@ function applyMove(board: Board, move: Move): Board {
   // Castling
   if (move.isCastling && piece.type === 'k') {
     if (move.to.col === 5) {
-      // Kingside: rook from h-file (7) to e-file (4)
+      // kingside: rook from h-file (7) to e-file (4)
       const rook = newBoard[move.from.row][7];
       newBoard[move.from.row][4] = rook;
       newBoard[move.from.row][7] = null;
     } else if (move.to.col === 1) {
-      // Queenside: rook from a-file (0) to c-file (2)
+      // queenside: rook from a-file (0) to c-file (2)
       const rook = newBoard[move.from.row][0];
       newBoard[move.from.row][2] = rook;
       newBoard[move.from.row][0] = null;

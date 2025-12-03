@@ -30,7 +30,7 @@ self.onmessage = function(e: MessageEvent) {
     move = negamaxAttempt3(board, color, depth, evaluateAttempt3, maxTime, castlingRights, positionHistory);
   } else if (evaluation === 'attempt2') {
     // Use negamax with transposition table for attempt2
-    move = negamaxMove(board, color, depth, evaluateAttempt2, maxTime, castlingRights, positionHistory);
+    move = negamaxAttempt3(board, color, depth, evaluateAttempt2, maxTime, castlingRights, positionHistory);
   } else {
     // Use standard minimax for other strategies
     let evaluateFunction;

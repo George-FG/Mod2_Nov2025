@@ -1,366 +1,485 @@
-import type { Board, PieceColor, Position, Piece } from './types';
-import { getValidMoves } from './moveValidation';
+import type { Board, PieceColor } from './types';
+import { isCheckmate } from './evaluate';
 
-// ==================== PIECE VALUES ====================
+// ----------------- Basic piece values (centipawns) -----------------
+
 const PIECE_VALUES: Record<string, number> = {
   p: 100,
   n: 320,
   b: 330,
   r: 500,
   q: 900,
-  k: 20000,
+  k: 0,
 };
 
-// ==================== PIECE-SQUARE TABLES ====================
-// These tables encode positional bonuses/penalties for each piece type
-// Values are from white's perspective (flip for black)
+// --------- Heuristic weights (centipawns) ---------------------------
 
-const PAWN_TABLE = [
-  0,  0,  0,  0,  0,  0,  0,  0,
-  50, 50, 50, 50, 50, 50, 50, 50,
-  10, 10, 20, 30, 30, 20, 10, 10,
-  5,  5, 10, 25, 25, 10,  5,  5,
-  0,  0,  0, 20, 20,  0,  0,  0,
-  5, -5,-10,  0,  0,-10, -5,  5,
-  5, 10, 10,-20,-20, 10, 10,  5,
-  0,  0,  0,  0,  0,  0,  0,  0
-];
+const W = {
+  // Pawn structure
+  doubledPawn: -12,
+  isolatedPawn: -10,
+  centralPawnAdvance: 5,  // bonus for central pawns (d/e files) pushed a bit
+  pawnAdvance: 2,         // small bonus for other pawn advances
 
-const KNIGHT_TABLE = [
-  -50,-40,-30,-30,-30,-30,-40,-50,
-  -40,-20,  0,  0,  0,  0,-20,-40,
-  -30,  0, 10, 15, 15, 10,  0,-30,
-  -30,  5, 15, 20, 20, 15,  5,-30,
-  -30,  0, 15, 20, 20, 15,  0,-30,
-  -30,  5, 10, 15, 15, 10,  5,-30,
-  -40,-20,  0,  5,  5,  0,-20,-40,
-  -50,-40,-30,-30,-30,-30,-40,-50
-];
+  // Development / piece activity
+  minorDev: 10,           // N/B off home rank
+  rookDev: 6,             // rook off home rank
+  centerKnight: 6,        // knight near centre
+  centerBishop: 4,
+  centerRook: 2,
+  centerQueen: 2,
+  bishopPair: 25,
 
-const BISHOP_TABLE = [
-  -20,-10,-10,-10,-10,-10,-10,-20,
-  -10,  0,  0,  0,  0,  0,  0,-10,
-  -10,  0,  5, 10, 10,  5,  0,-10,
-  -10,  5,  5, 10, 10,  5,  5,-10,
-  -10,  0, 10, 10, 10, 10,  0,-10,
-  -10, 10, 10, 10, 10, 10, 10,-10,
-  -10,  5,  0,  0,  0,  0,  5,-10,
-  -20,-10,-10,-10,-10,-10,-10,-20
-];
+  // Piece defense
+  pawnDefendsPiece: 2,    // piece defended by own pawn
 
-const ROOK_TABLE = [
-  0,  0,  0,  0,  0,  0,  0,  0,
-  5, 10, 10, 10, 10, 10, 10,  5,
-  -5,  0,  0,  0,  0,  0,  0, -5,
-  -5,  0,  0,  0,  0,  0,  0, -5,
-  -5,  0,  0,  0,  0,  0,  0, -5,
-  -5,  0,  0,  0,  0,  0,  0, -5,
-  -5,  0,  0,  0,  0,  0,  0, -5,
-  0,  0,  0,  5,  5,  0,  0,  0
-];
+  // King safety (opening / middlegame)
+  castlingBonus: 40,              // moderate preference to castle
+  kingCentralPenalty: -8,         // per file step from edge (b–g)
+  kingAdvancePenalty: -15,        // per rank away from home
+  kingShieldPenalty: -6,          // per missing pawn in front
+  kingMovedBeforeCastling: -60,   // king off start square and not castled
 
-const QUEEN_TABLE = [
-  -20,-10,-10, -5, -5,-10,-10,-20,
-  -10,  0,  0,  0,  0,  0,  0,-10,
-  -10,  0,  5,  5,  5,  5,  0,-10,
-   -5,  0,  5,  5,  5,  5,  0, -5,
-    0,  0,  5,  5,  5,  5,  0, -5,
-  -10,  5,  5,  5,  5,  5,  0,-10,
-  -10,  0,  5,  0,  0,  0,  0,-10,
-  -20,-10,-10, -5, -5,-10,-10,-20
-];
+  // Endgame king activity
+  kingCenterEndgame: 8,       // encourage centre king in endgame
+  oppKingEdgeEndgame: 10,     // push opponent king to edge
+  kingDistanceEndgame: 5,     // bring kings closer when winning,
+};
 
-const KING_MIDDLEGAME_TABLE = [
-  -30,-40,-40,-50,-50,-40,-40,-30,
-  -30,-40,-40,-50,-50,-40,-40,-30,
-  -30,-40,-40,-50,-50,-40,-40,-30,
-  -30,-40,-40,-50,-50,-40,-40,-30,
-  -20,-30,-30,-40,-40,-30,-30,-20,
-  -10,-20,-20,-20,-20,-20,-20,-10,
-   20, 20,  0,  0,  0,  0, 20, 20,
-   20, 30, 10,  0,  0, 10, 30, 20
-];
+// ----------------- Helper types -------------------------------------
 
-const KING_ENDGAME_TABLE = [
-  -50,-40,-30,-20,-20,-30,-40,-50,
-  -30,-20,-10,  0,  0,-10,-20,-30,
-  -30,-10, 20, 30, 30, 20,-10,-30,
-  -30,-10, 30, 40, 40, 30,-10,-30,
-  -30,-10, 30, 40, 40, 30,-10,-30,
-  -30,-10, 20, 30, 30, 20,-10,-30,
-  -30,-30,  0,  0,  0,  0,-30,-30,
-  -50,-30,-30,-30,-30,-30,-30,-50
-];
+type SideStats = {
+  color: PieceColor;
+  material: number;
+  nonPawnMaterial: number;
+  bishopCount: number;
+  queenCount: number;
 
-// ==================== HELPER FUNCTIONS ====================
+  // development / activity
+  minorDev: number;
+  rookDev: number;
+  centerActivity: number;
 
-function getPieceSquareValue(
-  piece: Piece,
-  row: number,
-  col: number,
-  isEndgame: boolean
-): number {
-  const isWhite = piece.color === 'white';
-  // Flip the row for black pieces
-  const tableRow = isWhite ? row : 7 - row;
-  const index = tableRow * 8 + col;
+  // pawn structure
+  pawnCountByFile: number[];
+  pawnPresenceByFile: boolean[];
+  centralPawnScore: number;
+  pawnAdvanceScore: number;
 
-  switch (piece.type) {
-    case 'p':
-      return PAWN_TABLE[index];
-    case 'n':
-      return KNIGHT_TABLE[index];
-    case 'b':
-      return BISHOP_TABLE[index];
-    case 'r':
-      return ROOK_TABLE[index];
-    case 'q':
-      return QUEEN_TABLE[index];
-    case 'k':
-      return isEndgame ? KING_ENDGAME_TABLE[index] : KING_MIDDLEGAME_TABLE[index];
-    default:
-      return 0;
-  }
+  // king
+  kingRow: number;
+  kingCol: number;
+
+  // “tactical” penalty for loose pieces (attacked by pawn, not defended by pawn)
+  loosePiecePenalty: number;
+};
+
+function makeSide(color: PieceColor): SideStats {
+  return {
+    color,
+    material: 0,
+    nonPawnMaterial: 0,
+    bishopCount: 0,
+    queenCount: 0,
+
+    minorDev: 0,
+    rookDev: 0,
+    centerActivity: 0,
+
+    pawnCountByFile: new Array<number>(8).fill(0),
+    pawnPresenceByFile: new Array<boolean>(8).fill(false),
+    centralPawnScore: 0,
+    pawnAdvanceScore: 0,
+
+    kingRow: -1,
+    kingCol: -1,
+
+    loosePiecePenalty: 0,
+  };
 }
 
-function isEndgamePhase(board: Board): boolean {
-  let queens = 0;
-  let minorPieces = 0;
-  let rooks = 0;
-
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (!piece) continue;
-
-      if (piece.type === 'q') queens++;
-      if (piece.type === 'n' || piece.type === 'b') minorPieces++;
-      if (piece.type === 'r') rooks++;
-    }
-  }
-
-  // Endgame if: no queens, or one queen and few pieces
-  return queens === 0 || (queens <= 1 && minorPieces + rooks <= 4);
-}
-
-// ==================== EVALUATION FEATURES ====================
-
-/**
- * Evaluate mobility (number of legal moves)
- */
-function evaluateMobility(board: Board, color: PieceColor): number {
-  let mobility = 0;
-
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (!piece || piece.color !== color) continue;
-
-      const from: Position = { row, col };
-      const moves = getValidMoves(board, from, piece);
-      mobility += moves.length;
-    }
-  }
-
-  return mobility * 2; // Weight each move as 2 centipawns
-}
-
-/**
- * Detect passed pawns (pawns with no enemy pawns blocking them)
- */
-function evaluatePassedPawns(board: Board, color: PieceColor): number {
-  let score = 0;
-  const isWhite = color === 'white';
-  const direction = isWhite ? 1 : -1;
-  //const startRow = isWhite ? 1 : 6;
-
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (!piece || piece.type !== 'p' || piece.color !== color) continue;
-
-      let isPassed = true;
-
-      // Check if there are enemy pawns ahead
-      for (let r = row + direction; r >= 0 && r < 8; r += direction) {
-        // Check same file and adjacent files
-        for (let c = Math.max(0, col - 1); c <= Math.min(7, col + 1); c++) {
-          const enemy = board[r][c];
-          if (enemy && enemy.type === 'p' && enemy.color !== color) {
-            isPassed = false;
-            break;
-          }
-        }
-        if (!isPassed) break;
-      }
-
-      if (isPassed) {
-        const rank = isWhite ? row : 7 - row;
-        // Passed pawns are worth more the further they advance
-        score += 20 + (rank * 10);
-      }
-    }
-  }
-
-  return score;
-}
-
-/**
- * Evaluate pawn structure (doubled, isolated pawns)
- */
-function evaluatePawnStructure(board: Board, color: PieceColor): number {
-  let score = 0;
-  const pawnFiles: number[] = new Array(8).fill(0);
-
-  // Count pawns per file
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (piece && piece.type === 'p' && piece.color === color) {
-        pawnFiles[col]++;
-      }
-    }
-  }
-
-  // Penalty for doubled pawns
-  for (let col = 0; col < 8; col++) {
-    if (pawnFiles[col] > 1) {
-      score -= 10 * (pawnFiles[col] - 1);
-    }
-  }
-
-  // Penalty for isolated pawns (no friendly pawns on adjacent files)
-  for (let col = 0; col < 8; col++) {
-    if (pawnFiles[col] > 0) {
-      const hasLeftNeighbor = col > 0 && pawnFiles[col - 1] > 0;
-      const hasRightNeighbor = col < 7 && pawnFiles[col + 1] > 0;
-
-      if (!hasLeftNeighbor && !hasRightNeighbor) {
-        score -= 15; // Isolated pawn penalty
-      }
-    }
-  }
-
-  return score;
-}
-
-/**
- * Evaluate king safety
- */
-function evaluateKingSafety(board: Board, color: PieceColor, isEndgame: boolean): number {
-  if (isEndgame) return 0; // King safety less important in endgame
-
-  let score = 0;
-  let kingRow = -1;
-  let kingCol = -1;
-
-  // Find king
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (piece && piece.type === 'k' && piece.color === color) {
-        kingRow = row;
-        kingCol = col;
-        break;
-      }
-    }
-    if (kingRow !== -1) break;
-  }
-
-  if (kingRow === -1) return 0;
-
-  const isWhite = color === 'white';
-  const homeRank = isWhite ? 0 : 7;
-  const pawnShieldRow = isWhite ? kingRow + 1 : kingRow - 1;
-
-  // Bonus for castling (king on f1/f8 or b1/b8)
-  // King starts at col 3, castles to col 5 (kingside) or col 1 (queenside)
-  if (kingRow === homeRank && (kingCol === 5 || kingCol === 1)) {
-    score += 30;
-  }
-
-  // Pawn shield
-  if (pawnShieldRow >= 0 && pawnShieldRow < 8) {
-    for (let c = Math.max(0, kingCol - 1); c <= Math.min(7, kingCol + 1); c++) {
-      const piece = board[pawnShieldRow][c];
-      if (piece && piece.type === 'p' && piece.color === color) {
-        score += 10; // Bonus for each pawn in front of king
-      }
-    }
-  }
-
-  return score;
-}
-
-/**
- * Bonus for bishop pair
- */
-function evaluateBishopPair(board: Board, color: PieceColor): number {
-  let bishops = 0;
-
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (piece && piece.type === 'b' && piece.color === color) {
-        bishops++;
-      }
-    }
-  }
-
-  return bishops >= 2 ? 30 : 0;
-}
-
-// ==================== MAIN EVALUATION ====================
+// ----------------------- Main evaluation ----------------------------
 
 export function evaluate(board: Board, color: PieceColor): number {
-  const isEndgame = isEndgamePhase(board);
-  
-  let whiteScore = 0;
-  let blackScore = 0;
+  // --- Hard win/loss (checkmate) ------------------------------------
+  const opponentColor: PieceColor = color === 'white' ? 'black' : 'white';
+  if (isCheckmate(board, opponentColor)) {
+    return 100000; // we delivered mate
+  }
+  if (isCheckmate(board, color)) {
+    return -100000; // we are mated
+  }
 
-  // Material and positional evaluation
+  const white = makeSide('white');
+  const black = makeSide('black');
+
+  // For pawn-defense bonus
+  let whitePawnDefenseBonus = 0;
+  let blackPawnDefenseBonus = 0;
+
+  // -------- First pass: material, dev, central activity, king pos, pawns ----
+
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
       const piece = board[row][col];
       if (!piece) continue;
 
-      const materialValue = PIECE_VALUES[piece.type];
-      const positionalValue = getPieceSquareValue(piece, row, col, isEndgame);
-      const totalValue = materialValue + positionalValue;
+      const side = piece.color === 'white' ? white : black;
+      const isWhite = piece.color === 'white';
+      const value = PIECE_VALUES[piece.type];
 
-      if (piece.color === 'white') {
-        whiteScore += totalValue;
-      } else {
-        blackScore += totalValue;
+      side.material += value;
+      if (piece.type !== 'p' && piece.type !== 'k') {
+        side.nonPawnMaterial += value;
+      }
+      if (piece.type === 'b') side.bishopCount++;
+      if (piece.type === 'q') side.queenCount++;
+
+      // Distance from that side's home rank: white home=0, black home=7
+      const rankFromHome = isWhite ? row : 7 - row;
+
+      // Simple centralization score: distance to board centre (3.5, 3.5)
+      const distFile = Math.abs(col - 3.5);
+      const distRank = Math.abs(row - 3.5);
+      const centerDist = Math.max(distFile, distRank);
+      const centerBonusBase = 3.5 - centerDist; // larger when closer to centre
+
+      switch (piece.type) {
+        case 'k': {
+          side.kingRow = row;
+          side.kingCol = col;
+          break;
+        }
+
+        case 'p': {
+          // track pawn structure
+          side.pawnCountByFile[col]++;
+          side.pawnPresenceByFile[col] = true;
+
+          // small bonus for advancing pawns (but not too big)
+          if (isWhite) {
+            side.pawnAdvanceScore += row * W.pawnAdvance;
+          } else {
+            side.pawnAdvanceScore += (7 - row) * W.pawnAdvance;
+          }
+
+          // extra for central pawns on d/e files advanced a bit
+          const isCentralFile = col === 3 || col === 4;
+          if (isCentralFile && rankFromHome >= 1 && rankFromHome <= 4) {
+            side.centralPawnScore += W.centralPawnAdvance;
+          }
+          break;
+        }
+
+        case 'n': {
+          if (rankFromHome > 0) side.minorDev++;
+          side.centerActivity += centerBonusBase * W.centerKnight;
+          break;
+        }
+
+        case 'b': {
+          if (rankFromHome > 0) side.minorDev++;
+          side.centerActivity += centerBonusBase * W.centerBishop;
+          break;
+        }
+
+        case 'r': {
+          if (rankFromHome > 0) side.rookDev++;
+          side.centerActivity += centerBonusBase * W.centerRook;
+          break;
+        }
+
+        case 'q': {
+          side.centerActivity += centerBonusBase * W.centerQueen;
+          break;
+        }
       }
     }
   }
 
-  // Lazy evaluation: if material difference is huge, skip expensive calculations
-  const materialDiff = Math.abs(whiteScore - blackScore);
-  const lazyThreshold = 500; // 5 pawns
+  // -------- Pawn-defense + pawn-attack (loose piece) --------------------
+  // Reward pieces defended by own pawns and penalise pieces attacked by enemy pawns
+  // without pawn defense. This is treated as a “material-like” penalty.
 
-  if (materialDiff > lazyThreshold) {
-    const diff = whiteScore - blackScore;
-    return color === 'white' ? diff : -diff;
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (!piece || piece.type === 'k') continue;
+
+      const isWhitePiece = piece.color === 'white';
+      const mySide = isWhitePiece ? white : black;
+
+      // ---- defended by pawn? (backward diagonal) ----
+      const defRow = isWhitePiece ? row - 1 : row + 1;
+      let defendedByPawn = false;
+
+      if (defRow >= 0 && defRow < 8) {
+        // left diagonal
+        if (col > 0) {
+          const d = board[defRow][col - 1];
+          if (d && d.type === 'p' && d.color === piece.color) defendedByPawn = true;
+        }
+        // right diagonal
+        if (!defendedByPawn && col < 7) {
+          const d = board[defRow][col + 1];
+          if (d && d.type === 'p' && d.color === piece.color) defendedByPawn = true;
+        }
+      }
+
+      if (defendedByPawn) {
+        if (piece.color === 'white') whitePawnDefenseBonus += W.pawnDefendsPiece;
+        else blackPawnDefenseBonus += W.pawnDefendsPiece;
+      }
+
+      // ---- attacked by enemy pawn? (forward diagonal of enemy) ----
+      let attackedByEnemyPawn = false;
+      if (isWhitePiece) {
+        // black pawn attacks downwards: from (r+1, c±1) to (r,c)
+        const atkRow = row + 1;
+        if (atkRow < 8) {
+          if (col > 0) {
+            const a = board[atkRow][col - 1];
+            if (a && a.type === 'p' && a.color === 'black') attackedByEnemyPawn = true;
+          }
+          if (!attackedByEnemyPawn && col < 7) {
+            const a = board[atkRow][col + 1];
+            if (a && a.type === 'p' && a.color === 'black') attackedByEnemyPawn = true;
+          }
+        }
+      } else {
+        // white pawn attacks upwards: from (r-1, c±1) to (r,c)
+        const atkRow = row - 1;
+        if (atkRow >= 0) {
+          if (col > 0) {
+            const a = board[atkRow][col - 1];
+            if (a && a.type === 'p' && a.color === 'white') attackedByEnemyPawn = true;
+          }
+          if (!attackedByEnemyPawn && col < 7) {
+            const a = board[atkRow][col + 1];
+            if (a && a.type === 'p' && a.color === 'white') attackedByEnemyPawn = true;
+          }
+        }
+      }
+
+      // If attacked by enemy pawn and NOT defended by own pawn: big “loose piece” penalty
+      if (attackedByEnemyPawn && !defendedByPawn) {
+        let penalty = 0;
+        switch (piece.type) {
+          case 'p':
+            penalty = 15;
+            break;
+          case 'n':
+          case 'b':
+            penalty = 80;   // ~0.8 pawn
+            break;
+          case 'r':
+            penalty = 120;
+            break;
+          case 'q':
+            penalty = 180;
+            break;
+        }
+        mySide.loosePiecePenalty += penalty;
+      }
+    }
   }
 
-  // Advanced features (only if position is close)
-  whiteScore += evaluateMobility(board, 'white');
-  blackScore += evaluateMobility(board, 'black');
+  // -------- Game phase detection ---------------------------------------
 
-  whiteScore += evaluatePassedPawns(board, 'white');
-  blackScore += evaluatePassedPawns(board, 'black');
+  const totalNonPawnMaterial = white.nonPawnMaterial + black.nonPawnMaterial;
+  // Smooth endgame weight: 0 in opening (3900+), 1.0 when very low material (< 1300)
+  const endgameWeight = Math.max(0, Math.min(1, (2600 - totalNonPawnMaterial) / 1300));
 
-  whiteScore += evaluatePawnStructure(board, 'white');
-  blackScore += evaluatePawnStructure(board, 'black');
+  // -------- Pawn structure penalties / bonuses --------------------------
 
-  whiteScore += evaluateKingSafety(board, 'white', isEndgame);
-  blackScore += evaluateKingSafety(board, 'black', isEndgame);
+  function pawnStructure(me: SideStats): number {
+    let score = 0;
 
-  whiteScore += evaluateBishopPair(board, 'white');
-  blackScore += evaluateBishopPair(board, 'black');
+    for (let file = 0; file < 8; file++) {
+      const cnt = me.pawnCountByFile[file];
 
-  const diff = whiteScore - blackScore;
-  return color === 'white' ? diff : -diff;
+      if (cnt > 1) {
+        score += (cnt - 1) * W.doubledPawn;
+      }
+
+      if (cnt > 0) {
+        const hasNeighbor =
+          (file > 0 && me.pawnPresenceByFile[file - 1]) ||
+          (file < 7 && me.pawnPresenceByFile[file + 1]);
+        if (!hasNeighbor) {
+          score += W.isolatedPawn;
+        }
+      }
+    }
+
+    score += me.centralPawnScore;
+    score += me.pawnAdvanceScore;
+
+    return score;
+  }
+
+  // -------- Development / bishop pair / centre -------------------------
+
+  function developmentAndPieces(me: SideStats): number {
+    let score = 0;
+
+    score += me.minorDev * W.minorDev;
+    score += me.rookDev * W.rookDev;
+    score += me.centerActivity;
+
+    if (me.bishopCount >= 2) {
+      score += W.bishopPair;
+    }
+
+    return score;
+  }
+
+  // -------- King safety / activity (smooth transition) ----------
+
+  function kingTerms(me: SideStats, egWeight: number): number {
+    let score = 0;
+    if (me.kingRow === -1) return score;
+
+    const row = me.kingRow;
+    const col = me.kingCol;
+    const isWhite = me.color === 'white';
+
+    const homeRank = isWhite ? 0 : 7;
+    const startFile = 3; // d-file (king starting position)
+    const onHomeRank = row === homeRank;
+    const onStartSquare = onHomeRank && col === startFile;
+    const castled = onHomeRank && (col === 5 || col === 1);
+
+    const mgWeight = 1.0 - egWeight; // middlegame weight
+
+    // Middlegame king safety (weighted down in endgame)
+    if (mgWeight > 0.1) {
+      if (castled) {
+        score += W.castlingBonus * mgWeight;
+      } else {
+        // If king left starting square and is not castled: penalty
+        if (!onStartSquare) {
+          score += W.kingMovedBeforeCastling * mgWeight;
+        }
+
+        // central file penalty (b–g bad)
+        const fileFromEdge = Math.min(col, 7 - col); // 0 on a/h, 3 in centre
+        score += fileFromEdge * W.kingCentralPenalty * mgWeight;
+
+        // rank advance penalty (walking up the board)
+        const ranksAdvanced = isWhite
+          ? Math.max(0, row - homeRank)
+          : Math.max(0, homeRank - row);
+        score += ranksAdvanced * W.kingAdvancePenalty * mgWeight;
+
+        // pawn shield in front of king
+        const pawnRow = isWhite ? row + 1 : row - 1;
+        if (pawnRow >= 0 && pawnRow < 8) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const c = col + dc;
+            if (c < 0 || c > 7) continue;
+
+            const front = board[pawnRow][c];
+            if (!front || front.type !== 'p' || front.color !== me.color) {
+              score += W.kingShieldPenalty * mgWeight;
+            }
+          }
+        }
+      }
+    }
+
+    // Endgame: encourage king centralization (weighted up in endgame)
+    if (egWeight > 0.1) {
+      const distFile = Math.abs(col - 3.5);
+      const distRank = Math.abs(row - 3.5);
+      const centerDist = Math.max(distFile, distRank);
+      const centerBonus = (3.5 - centerDist) * W.kingCenterEndgame;
+      score += centerBonus * egWeight;
+    }
+
+    return score;
+  }
+
+  // -------- Endgame king race terms -------------
+
+  function endgameKingRace(
+    me: SideStats,
+    opp: SideStats
+  ): number {
+    if (me.kingRow === -1 || opp.kingRow === -1) return 0;
+
+    const oppKingCenterDist = Math.max(
+      Math.abs(opp.kingRow - 3.5),
+      Math.abs(opp.kingCol - 3.5)
+    );
+    const kingDist =
+      Math.abs(me.kingRow - opp.kingRow) +
+      Math.abs(me.kingCol - opp.kingCol);
+
+    let score = 0;
+    score += oppKingCenterDist * W.oppKingEdgeEndgame;
+    score += (14 - kingDist) * W.kingDistanceEndgame; // 14 = max manhattan
+
+    return score;
+  }
+
+  // -------- Combine for each side --------------------------------------
+
+  function baseEvalSide(me: SideStats, pawnDefenseBonus: number, egWeight: number): number {
+    let s = 0;
+
+    s += me.material;
+    s += pawnStructure(me);
+    s += developmentAndPieces(me);
+    s += kingTerms(me, egWeight);
+    s += pawnDefenseBonus;
+
+    return s;
+  }
+
+  const whiteBase = baseEvalSide(white, whitePawnDefenseBonus, endgameWeight);
+  const blackBase = baseEvalSide(black, blackPawnDefenseBonus, endgameWeight);
+
+  let whiteScore = whiteBase;
+  let blackScore = blackBase;
+
+  // Add relational endgame king terms when in endgame and one side is winning
+  if (endgameWeight > 0.5) {
+    if (whiteBase > blackBase + 100) {
+      whiteScore += endgameKingRace(white, black) * endgameWeight;
+    } else if (blackBase > whiteBase + 100) {
+      blackScore += endgameKingRace(black, white) * endgameWeight;
+    }
+  }
+
+  // ================== MATERIAL vs POSITION SPLIT ======================
+
+  // 1) Pure material, adjusted by loose-piece “tactical” penalties
+  const whiteMat = white.material - white.loosePiecePenalty;
+  const blackMat = black.material - black.loosePiecePenalty;
+  const materialDiff = whiteMat - blackMat;
+
+  // 2) Everything else is "positional"
+  const whitePos = whiteScore - white.material;
+  const blackPos = blackScore - black.material;
+  let positionalDiff = whitePos - blackPos;
+
+  // Hard clamp: positional factors may NEVER outweigh a pawn.
+  const MAX_POSITIONAL = 40;
+  if (positionalDiff > MAX_POSITIONAL) positionalDiff = MAX_POSITIONAL;
+  if (positionalDiff < -MAX_POSITIONAL) positionalDiff = -MAX_POSITIONAL;
+
+  let totalDiff = materialDiff + positionalDiff;
+
+  // Small anti-draw bias:
+  // If we are materially ahead but the eval is very close to 0,
+  // nudge it away from 0 so engines don't happily repeat.
+  const NEAR_ZERO = 10; // 0.1 pawn
+  if (materialDiff !== 0 && Math.abs(totalDiff) < NEAR_ZERO) {
+    const sign = materialDiff > 0 ? 1 : -1;
+    totalDiff = sign * NEAR_ZERO;
+  }
+
+  // Return from the perspective of `color`
+  return color === 'white' ? totalDiff : -totalDiff;
 }
