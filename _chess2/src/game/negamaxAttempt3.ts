@@ -328,22 +328,29 @@ export function myMinimaxMove(
 
       let score: number;
 
-      // Threefold repetition: treat as near-draw with side-to-move perspective
       if (isThirdRepetition(newHash, history)) {
+        // UPDATED repetition handling:
+        // - evaluate from root perspective, transform to sideToMove
         const evalFromRoot = evaluate(newBoard, rootColor);
         const sign = sideToMove === rootColor ? 1 : -1;
         const evalFromSide = sign * evalFromRoot;
 
-        let drawScore = 0;
-        if (evalFromSide > 100) drawScore = -30;     // better side dislikes draw
-        else if (evalFromSide < -100) drawScore = 30; // worse side likes draw
-
-        score = drawScore;
+        // Soft bias:
+        // clearly winning (> +2 pawns) -> repetition mildly bad
+        // clearly losing  (< -2 pawns) -> repetition mildly good
+        if (evalFromSide > 200)      score = -150;
+        else if (evalFromSide < -200) score = 150;
+        else score = 0;
       } else {
         const newHistory = [...history, newHash];
 
         // Late Move Reduction: reduce depth for later quiet moves
-        const isLateMove = movesSearched >= 4 && depth >= 3 && !inCheck && !move.captured && !move.promotion;
+        const isLateMove =
+          movesSearched >= 4 &&
+          depth >= 3 &&
+          !inCheck &&
+          !move.captured &&
+          !move.promotion;
         const reduction = isLateMove ? 1 : 0;
 
         if (movesSearched === 0) {
@@ -454,14 +461,13 @@ export function myMinimaxMove(
 
       if (isThirdRepetition(newHash, history)) {
         const evalFromRoot = evaluate(newBoard, rootColor);
-        const sign = color === rootColor ? 1 : -1; // usually 1, but explicit
+        // at root, sideToMove === rootColor, but keep this explicit
+        const sign = color === rootColor ? 1 : -1;
         const evalFromSide = sign * evalFromRoot;
 
-        let drawScore = 0;
-        if (evalFromSide > 100) drawScore = -30;
-        else if (evalFromSide < -100) drawScore = 30;
-
-        score = drawScore;
+        if (evalFromSide > 200)      score = -150;
+        else if (evalFromSide < -200) score = 150;
+        else score = 0;
       } else {
         const newHistory = [...history, newHash];
 
@@ -512,8 +518,12 @@ export function myMinimaxMove(
     bestMoveAtRoot = allMoves[0];
   }
 
+  if (depth === 0) {
+    depth = 1000; // effectively unlimited
+  }
   for (let currentDepth = 1; currentDepth <= depth; currentDepth++) {
     if (isTimeExpired()) break;
+    console.log(`Searching at depth ${currentDepth}... (time elapsed: ${Date.now() - startTime} ms)`);
 
     const previousBest = bestMoveAtRoot;
     searchRoot(currentDepth, baseHistory);

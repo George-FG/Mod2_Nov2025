@@ -30,6 +30,7 @@ const DEPTH_OPTIONS = DEPTH_POINTS.map((points, i) => ({
   value: i + 1,
   points,
 }));
+DEPTH_OPTIONS.push({ label: "Unlimited", value: 0, points: 800 });
 
 const MOVE_TIME_OPTIONS = [
   { label: "Instant", value: 0, points: 0 },
